@@ -80,7 +80,7 @@ export const AircraftModal: React.FC<AircraftModalProps> = ({
               placeholder="e.g. 18AC, 49191, 125MG"
               value={tailNumber}
               onChange={(e) => setTailNumber(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono text-sm focus:outline-none focus:bg-white focus:border-slate-800 transition-all"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-sans font-semibold tracking-wide text-sm focus:outline-none focus:bg-white focus:border-slate-800 transition-all"
             />
             {tailNumber.trim() && (
               <div className="mt-1.5 text-[11px]">

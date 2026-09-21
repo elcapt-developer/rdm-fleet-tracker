@@ -63,12 +63,12 @@ export const PlainFleetBoard: React.FC<PlainFleetBoardProps> = ({
                   <h2 className="font-bold text-base text-slate-900 tracking-tight">
                     {location}
                   </h2>
-                  <span className="text-[11px] text-slate-500 font-mono">
+                  <span className="text-[11px] text-slate-500 font-medium">
                     ({location === 'Madras' ? 'S33' : location === 'Sky Service' ? 'RDM FBO' : 'Main Base'})
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center justify-center min-w-[32px] h-7 px-2.5 rounded-md bg-slate-900 text-white font-mono font-bold text-sm shadow-xs">
+                  <span className="inline-flex items-center justify-center min-w-[32px] h-7 px-2.5 rounded-md bg-slate-900 text-white font-bold text-sm shadow-xs tabular-nums">
                     {planes.length}
                   </span>
                 </div>
@@ -124,7 +124,7 @@ export const PlainFleetBoard: React.FC<PlainFleetBoardProps> = ({
                         </div>
 
                         {/* Tail Number */}
-                        <div className="w-20 shrink-0 font-mono font-bold text-slate-950 text-sm tracking-tight">
+                        <div className="w-20 shrink-0 font-bold text-slate-900 text-[15px] tracking-tight tabular-nums">
                           {cleanTail}
                         </div>
 

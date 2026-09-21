@@ -39,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
               | Redmond Campus
             </span>
             {totalCount !== undefined && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-900 text-white font-mono shadow-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-900 text-white shadow-xs tabular-nums">
                 <span>{totalCount}</span>
                 <span className="text-[10px] font-normal text-slate-300">Fleet</span>
               </span>
@@ -61,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search tail # (18AC, 49191)..."
-              className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-slate-400 font-mono"
+              className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-slate-400 font-medium"
             />
             {searchQuery && (
               <button
