@@ -84,10 +84,10 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Edit Mode Toggle */}
+          {/* Dispatch Edit Mode Toggle */}
           <button
             onClick={onRequestEditMode}
-            title={isEditMode ? 'Click to lock into View Only mode' : 'Click to enter password and enable Edit Mode'}
+            title={isEditMode ? 'Click to lock into View Only mode' : 'Click to enter password and enable Dispatch Edit Mode'}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
               isEditMode
                 ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
@@ -95,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             {isEditMode ? <Unlock className="w-3.5 h-3.5 text-amber-600" /> : <Lock className="w-3.5 h-3.5 text-slate-500" />}
-            <span>{isEditMode ? 'Edit Mode ON' : 'Edit Mode'}</span>
+            <span>{isEditMode ? 'Dispatch Edit Mode ON' : 'Dispatch Edit Mode'}</span>
           </button>
         </div>
       </div>

@@ -128,7 +128,7 @@ export const App: React.FC = () => {
         {isEditMode && (
           <div className="mt-2.5 px-3.5 py-1.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between text-xs text-amber-900">
             <span>
-              ✏️ <strong>Edit Mode Active</strong>: Drag & drop planes between ramps, or use the quick status & location selectors.
+              ✏️ <strong>Dispatch Edit Mode Active</strong>: Drag & drop planes between ramps, or use the quick status & location selectors.
             </span>
             <button
               onClick={() => {

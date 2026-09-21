@@ -45,7 +45,7 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-slate-700" />
             <h3 className="text-sm font-bold text-slate-900">
-              Instructor Edit Mode
+              Dispatch Edit Mode
             </h3>
           </div>
           <button
