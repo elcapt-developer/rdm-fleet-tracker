@@ -12,7 +12,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 65.4,
     totalHobbs: 4120.6,
     notes: 'Tie-down row B',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-5318M',
@@ -23,7 +23,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 3.8, // Low hours! Under 5h threshold
     totalHobbs: 3892.4,
     notes: 'Low hours remaining before 100hr MX. Priority for local solo/dual only.',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-606GS',
@@ -34,7 +34,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 42.1,
     totalHobbs: 5214.0,
     notes: 'Clean runup, oil topped',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-6342L',
@@ -45,7 +45,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 78.5,
     totalHobbs: 2980.2,
     notes: 'Parked near fuel island',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-68713',
@@ -56,7 +56,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 51.0,
     totalHobbs: 4610.8,
     notes: 'Ready for pattern work',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   // Cessna 172
   {
@@ -68,7 +68,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 34.2,
     totalHobbs: 6105.3,
     notes: 'G1000 equipped, IFR current',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-3555L',
@@ -81,7 +81,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     enrouteTo: 'Sky Service',
     eta: '18:15',
     notes: 'Cross-country returning from Madras to RDM',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-436SP',
@@ -94,7 +94,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     enrouteTo: 'Sky Service',
     eta: '18:30',
     notes: 'Commercial training stage check flight',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
 
   // ================= Sky Service (RDM FBO) =================
@@ -108,7 +108,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 88.0,
     totalHobbs: 3205.5,
     notes: 'Fresh 100hr inspection signed off',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-48521',
@@ -119,7 +119,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 14.5,
     totalHobbs: 4402.1,
     notes: 'Inspection scheduled later this week',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-6400Q',
@@ -132,7 +132,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     enrouteTo: 'Madras',
     eta: '18:45',
     notes: 'Transit flight to Madras practice area',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   // Cessna 172
   {
@@ -145,7 +145,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     totalHobbs: 5800.0,
     squawks: ['100-Hour Inspection Due', 'Awaiting spark plug replacement'],
     notes: 'AOG - Do not dispatch until MX signoff',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-403SP',
@@ -156,7 +156,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 45.0,
     totalHobbs: 3950.4,
     notes: 'Parked spot 4',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-4203P',
@@ -167,7 +167,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 62.4,
     totalHobbs: 4310.2,
     notes: 'Full fuel tanks',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-52013',
@@ -178,7 +178,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 31.8,
     totalHobbs: 4780.0,
     notes: 'Available for instrument dual',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-589SP',
@@ -189,7 +189,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 57.2,
     totalHobbs: 3670.3,
     notes: 'Spot 7 north ramp',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   // Piper PA-44 Seminole
   {
@@ -201,7 +201,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 71.6,
     totalHobbs: 2150.5,
     notes: 'Multi-engine commercial / MEI training ready',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-446PA',
@@ -213,7 +213,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     totalHobbs: 2890.0,
     squawks: ['Left engine cylinder inspection', 'Right cowl flap link adjustment'],
     notes: 'Down for scheduled engine work',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   {
     id: 'plane-552MD',
@@ -225,7 +225,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     totalHobbs: 3100.0,
     squawks: ['100-Hour Inspection in progress'],
     notes: 'Hangar staging, MX underway',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
 
   // ================= HAA Campus =================
@@ -240,7 +240,7 @@ export const INITIAL_FLEET: Aircraft[] = [
     totalHobbs: 6240.0,
     squawks: ['100-Hour Inspection & Avionics check'],
     notes: 'Inside main maintenance bay',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
   // Cessna 152
   {
@@ -252,6 +252,6 @@ export const INITIAL_FLEET: Aircraft[] = [
     hoursRemaining: 82.5,
     totalHobbs: 4190.2,
     notes: 'Campus ramp ready for dispatch',
-    updatedAt: new Date().toISOString(),
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
 ];

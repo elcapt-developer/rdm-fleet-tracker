@@ -23,6 +23,7 @@ export function useFleetSync() {
   const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<number | null>(null);
   const deletedIdsRef = useRef<Map<string, number>>(new Map());
+  const pendingLocalUpdatesRef = useRef<Map<string, number>>(new Map());
 
   // Sync state to LocalStorage as instant cache
   const updateLocalState = useCallback((newFleet: Aircraft[]) => {
@@ -34,7 +35,8 @@ export function useFleetSync() {
     }
   }, []);
 
-  // Smart Merge: Merge server fleet with local state using updatedAt timestamps to prevent rollback from Edge Cache / polling
+  // Smart Merge: Merge server fleet with local state. Only protect aircraft modified in THIS tab within last 4s from Edge Cache rollback.
+  // All other aircraft updates from other users/tabs are accepted immediately!
   const mergeFleetData = useCallback((serverFleet: Aircraft[]) => {
     setFleet((currentFleet) => {
       const currentMap = new Map(currentFleet.map((p) => [p.id, p]));
@@ -42,42 +44,45 @@ export function useFleetSync() {
       const merged: Aircraft[] = [];
       const now = Date.now();
 
-      // Clean up old deleted IDs (older than 30s)
+      // Clean up old pending local updates (older than 4s)
+      for (const [id, time] of pendingLocalUpdatesRef.current.entries()) {
+        if (now - time > 4000) {
+          pendingLocalUpdatesRef.current.delete(id);
+        }
+      }
+
+      // Clean up old deleted IDs (older than 10s)
       for (const [delId, time] of deletedIdsRef.current.entries()) {
-        if (now - time > 30000) {
+        if (now - time > 10000) {
           deletedIdsRef.current.delete(delId);
         }
       }
 
       for (const sPlane of serverFleet) {
-        // Skip if this plane was deleted locally recently (prevents ghost recreation from edge cache)
+        // Skip if this plane was deleted locally recently
         if (deletedIdsRef.current.has(sPlane.id)) {
           continue;
         }
 
         const cPlane = currentMap.get(sPlane.id);
-        if (!cPlane) {
-          merged.push(sPlane);
-          continue;
+        // Only if THIS tab has a pending optimistic update in the last 4s, check if local is newer
+        if (cPlane && pendingLocalUpdatesRef.current.has(sPlane.id)) {
+          const sTime = sPlane.updatedAt ? new Date(sPlane.updatedAt).getTime() : 0;
+          const cTime = cPlane.updatedAt ? new Date(cPlane.updatedAt).getTime() : 0;
+          if (cTime > sTime) {
+            merged.push(cPlane);
+            continue;
+          }
         }
 
-        const sTime = sPlane.updatedAt ? new Date(sPlane.updatedAt).getTime() : 0;
-        const cTime = cPlane.updatedAt ? new Date(cPlane.updatedAt).getTime() : 0;
-
-        // Prevent rollback: If local has a newer modification time than server's cached response,
-        // keep local optimistic state!
-        if (cTime > sTime) {
-          merged.push(cPlane);
-        } else {
-          merged.push(sPlane);
-        }
+        // Otherwise, server data is the single source of truth!
+        merged.push(sPlane);
       }
 
-      // Preserve newly added planes that might not have hit the cache yet (within 15s)
+      // Preserve newly added planes in this tab that haven't hit server yet
       for (const cPlane of currentFleet) {
         if (!serverIds.has(cPlane.id) && !deletedIdsRef.current.has(cPlane.id)) {
-          const cTime = cPlane.updatedAt ? new Date(cPlane.updatedAt).getTime() : 0;
-          if (now - cTime < 15000) {
+          if (pendingLocalUpdatesRef.current.has(cPlane.id)) {
             merged.push(cPlane);
           }
         }
@@ -234,13 +239,13 @@ export function useFleetSync() {
     fetchFleetRest();
     connectWs();
 
-    // Fallback polling for Vercel / serverless deployments without WebSockets
+    // Fallback polling for Vercel / serverless deployments without WebSockets (2.5s for real-time feel)
     const pollInterval = window.setInterval(() => {
       // Only poll when the tab is actively visible and WebSockets are not connected
       if (document.visibilityState === 'visible' && (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN)) {
         fetchFleetRest();
       }
-    }, 8000);
+    }, 2500);
 
     // Refresh immediately on tab focus
     const handleVisibilityChange = () => {
@@ -250,18 +255,37 @@ export function useFleetSync() {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // Immediate 0ms sync across browser tabs on the same device
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          const updatedFleet: Aircraft[] = JSON.parse(e.newValue);
+          if (Array.isArray(updatedFleet) && updatedFleet.length > 0) {
+            setFleet(updatedFleet);
+          }
+        } catch {
+          /* empty */
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
     return () => {
       isUnmounted = true;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
       clearInterval(pollInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('storage', handleStorageChange);
       if (wsRef.current) wsRef.current.close();
     };
   }, [fetchFleetRest, updateLocalState, notifyUser]);
 
   // Action: Update Aircraft
   const updateAircraft = useCallback(async (updates: Partial<Aircraft> & { id: string }) => {
+    // Record that this tab just updated this aircraft to protect it from stale edge cache
+    pendingLocalUpdatesRef.current.set(updates.id, Date.now());
+
     // Optimistic UI update
     setFleet((prev) => {
       const next = prev.map((p) => (p.id === updates.id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p));
@@ -396,6 +420,7 @@ export function useFleetSync() {
       });
       if (res.ok) {
         const created = await res.json();
+        pendingLocalUpdatesRef.current.set(created.id, Date.now());
         setFleet((prev) => {
           const next = [...prev, created];
           try {
