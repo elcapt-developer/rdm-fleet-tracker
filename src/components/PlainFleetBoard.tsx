@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Aircraft, AirportLocation, AircraftStatus } from '../types';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, GripVertical } from 'lucide-react';
 
 interface PlainFleetBoardProps {
   fleet: Aircraft[];
@@ -21,6 +21,9 @@ export const PlainFleetBoard: React.FC<PlainFleetBoardProps> = ({
   onAddPlaneToLocation,
   onDeleteAircraft,
 }) => {
+  const [draggingPlaneId, setDraggingPlaneId] = useState<string | null>(null);
+  const [dragOverLocation, setDragOverLocation] = useState<AirportLocation | null>(null);
+
   // Sort aircraft inside each location logically (Type ascending, then Tail number)
   const getPlanesForLocation = (loc: AirportLocation) => {
     return fleet
@@ -56,7 +59,36 @@ export const PlainFleetBoard: React.FC<PlainFleetBoardProps> = ({
           const planes = getPlanesForLocation(location);
 
           return (
-            <div key={location} className="flex flex-col">
+            <div
+              key={location}
+              onDragOver={(e) => {
+                if (!isEditMode) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragOverLocation !== location) {
+                  setDragOverLocation(location);
+                }
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                setDragOverLocation(null);
+              }}
+              onDrop={(e) => {
+                if (!isEditMode) return;
+                e.preventDefault();
+                const planeId = e.dataTransfer.getData('text/plain');
+                if (planeId) {
+                  onMoveLocation(planeId, location);
+                }
+                setDraggingPlaneId(null);
+                setDragOverLocation(null);
+              }}
+              className={`flex flex-col transition-all duration-150 ${
+                dragOverLocation === location && isEditMode
+                  ? 'bg-blue-50/40 ring-2 ring-blue-500/50 ring-inset'
+                  : ''
+              }`}
+            >
               {/* Location Title Header */}
               <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -76,6 +108,7 @@ export const PlainFleetBoard: React.FC<PlainFleetBoardProps> = ({
 
               {/* Table Sub-header */}
               <div className="flex items-center gap-2 bg-slate-100/80 border-b border-slate-200 text-xs font-bold text-slate-600 px-3.5 py-2 uppercase tracking-wider">
+                {isEditMode && <div className="w-3.5 shrink-0"></div>}
                 <div className="w-12 shrink-0">Type</div>
                 <div className="w-20 shrink-0">Tail</div>
                 <div className="flex-1 min-w-0">Status</div>
@@ -106,14 +139,32 @@ export const PlainFleetBoard: React.FC<PlainFleetBoardProps> = ({
                     return (
                       <div
                         key={plane.id}
+                        draggable={isEditMode}
+                        onDragStart={(e) => {
+                          if (!isEditMode) return;
+                          e.dataTransfer.setData('text/plain', plane.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          setDraggingPlaneId(plane.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggingPlaneId(null);
+                          setDragOverLocation(null);
+                        }}
                         className={`flex items-center gap-2 px-3.5 py-2.5 text-xs transition-colors hover:bg-slate-100/60 ${
                           plane.status === 'Down'
                             ? 'bg-rose-50/50'
                             : plane.status === 'Up-Low Hours'
                             ? 'bg-amber-50/40'
                             : ''
+                        } ${isEditMode ? 'cursor-grab active:cursor-grabbing select-none' : ''} ${
+                          draggingPlaneId === plane.id ? 'opacity-30 bg-slate-200' : ''
                         }`}
                       >
+                        {/* Drag Handle Icon in Edit Mode */}
+                        {isEditMode && (
+                          <GripVertical className="w-3.5 h-3.5 text-slate-300 hover:text-slate-500 shrink-0 cursor-grab" />
+                        )}
+
                         {/* Type */}
                         <div className="w-12 shrink-0 font-bold text-slate-800 text-[13px]">
                           {showType ? (
