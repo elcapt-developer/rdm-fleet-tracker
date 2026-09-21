@@ -136,6 +136,8 @@ app.use(express.json());
 
 // GET /api/fleet
 app.get(['/api/fleet', '/fleet'], async (req, res) => {
+  // Edge Cache: shields Redis and serverless invocations for concurrent viewers
+  res.setHeader('Cache-Control', 'public, s-maxage=3, stale-while-revalidate=6');
   const fleet = await getFleet();
   res.json(fleet);
 });

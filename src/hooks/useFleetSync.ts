@@ -171,10 +171,11 @@ export function useFleetSync() {
 
     // Fallback polling for Vercel / serverless deployments without WebSockets
     const pollInterval = window.setInterval(() => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      // Only poll when the tab is actively visible and WebSockets are not connected
+      if (document.visibilityState === 'visible' && (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN)) {
         fetchFleetRest();
       }
-    }, 4000);
+    }, 8000);
 
     // Refresh immediately on tab focus
     const handleVisibilityChange = () => {
