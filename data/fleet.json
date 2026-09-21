@@ -69,14 +69,14 @@
     "id": "plane-3555L",
     "tailNumber": "3555L",
     "type": "172",
-    "location": "Sky Service",
-    "status": "Up",
+    "location": "Madras",
+    "status": "Up-Enroute",
     "hoursRemaining": 18.5,
     "totalHobbs": 3412.7,
     "enrouteTo": "Sky Service",
     "eta": "18:15",
     "notes": "Cross-country returning from Madras to RDM",
-    "updatedAt": "2026-09-21T01:21:05.212Z"
+    "updatedAt": "2026-09-21T01:45:00.000Z"
   },
   {
     "id": "plane-436SP",

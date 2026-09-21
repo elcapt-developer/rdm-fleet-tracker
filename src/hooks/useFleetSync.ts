@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Aircraft, AirportLocation, AircraftStatus, WSMessage } from '../types';
 import { INITIAL_FLEET } from '../data/seedFleet';
 
-const STORAGE_KEY = 'haa_aircraft_fleet_cache';
+const STORAGE_KEY = 'haa_aircraft_fleet_cache_v2';
 
 export function useFleetSync() {
   const [fleet, setFleet] = useState<Aircraft[]>(() => {

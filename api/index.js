@@ -34,7 +34,7 @@ const SEED_DATA = [
 
 import { put, list } from '@vercel/blob';
 
-const STORAGE_KEY = 'rdm_fleet';
+const STORAGE_KEY = 'rdm_fleet_v2';
 let memoryFleet = [...SEED_DATA];
 
 // Initialize Redis / Upstash / Vercel KV if environment variables are provided
@@ -84,7 +84,7 @@ async function getFleet() {
   // 2. Try Vercel Blob
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      const { blobs } = await list({ prefix: 'rdm-fleet.json' });
+      const { blobs } = await list({ prefix: 'rdm-fleet-v2.json' });
       if (blobs && blobs.length > 0) {
         const res = await fetch(blobs[0].url);
         if (res.ok) {
@@ -92,7 +92,7 @@ async function getFleet() {
           if (Array.isArray(data) && data.length > 0) return data;
         }
       }
-      await put('rdm-fleet.json', JSON.stringify(SEED_DATA), {
+      await put('rdm-fleet-v2.json', JSON.stringify(SEED_DATA), {
         access: 'public',
         addRandomSuffix: false,
       });
@@ -120,7 +120,7 @@ async function saveFleet(newFleet) {
   // Save to Vercel Blob if available
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      await put('rdm-fleet.json', JSON.stringify(newFleet), {
+      await put('rdm-fleet-v2.json', JSON.stringify(newFleet), {
         access: 'public',
         addRandomSuffix: false,
       });
