@@ -50,7 +50,7 @@ export const PlainFleetBoard: React.FC<PlainFleetBoardProps> = ({
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden my-3">
-      {/* 3-Column Responsive Grid matching screenshot */}
+      {/* 3-Column Responsive Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
         {LOCATIONS.map((location) => {
           const planes = getPlanesForLocation(location);
@@ -95,7 +95,7 @@ export const PlainFleetBoard: React.FC<PlainFleetBoardProps> = ({
                   </div>
                 ) : (
                   planes.map((plane, idx) => {
-                    // Group repeating type like the screenshot
+                    // Group repeating type cleanly
                     const prevPlane = idx > 0 ? planes[idx - 1] : null;
                     const showType = !prevPlane || prevPlane.type !== plane.type;
 

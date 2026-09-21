@@ -1,12 +1,11 @@
 import React from 'react';
-import { Lock, Unlock, Plus, RotateCcw, Search, X } from 'lucide-react';
+import { Lock, Unlock, Plus, Search, X } from 'lucide-react';
 
 interface HeaderProps {
   lastUpdatedTime: Date;
   isEditMode: boolean;
   onRequestEditMode: () => void;
   onOpenAddModal: () => void;
-  onResetFleet: () => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   totalCount?: number;
@@ -17,7 +16,6 @@ export const Header: React.FC<HeaderProps> = ({
   isEditMode,
   onRequestEditMode,
   onOpenAddModal,
-  onResetFleet,
   searchQuery,
   setSearchQuery,
   totalCount,
@@ -53,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Right Actions: Search, Add, Edit Mode, Reset */}
+        {/* Right Actions: Search, Add, Edit Mode */}
         <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
           {/* Simple Search */}
           <div className="relative flex-1 sm:w-56">
@@ -99,21 +97,6 @@ export const Header: React.FC<HeaderProps> = ({
             {isEditMode ? <Unlock className="w-3.5 h-3.5 text-amber-600" /> : <Lock className="w-3.5 h-3.5 text-slate-500" />}
             <span>{isEditMode ? 'Edit Mode ON' : 'Edit Mode'}</span>
           </button>
-
-          {/* Reset Fleet */}
-          {isEditMode && (
-            <button
-              onClick={() => {
-                if (window.confirm('Reset all aircraft locations and status back to screenshot initial data?')) {
-                  onResetFleet();
-                }
-              }}
-              title="Reset fleet to initial state"
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
     </header>

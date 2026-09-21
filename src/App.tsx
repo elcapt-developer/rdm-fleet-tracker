@@ -117,7 +117,6 @@ export const App: React.FC = () => {
         isEditMode={isEditMode}
         onRequestEditMode={handleRequestEditMode}
         onOpenAddModal={() => handleOpenAddModal()}
-        onResetFleet={resetFleet}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         totalCount={fleet.length}
@@ -143,7 +142,7 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* 3-Column Table matching Teams screenshot */}
+        {/* 3-Column Table for Madras, Sky Service, and HAA Campus */}
         <PlainFleetBoard
           fleet={filteredFleet}
           isEditMode={isEditMode}
