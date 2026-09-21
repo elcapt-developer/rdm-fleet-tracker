@@ -32,10 +32,12 @@ const SEED_DATA = [
   { id: 'plane-5366M', tailNumber: '5366M', type: '152', location: 'HAA Campus', status: 'Up', hoursRemaining: 82.5, totalHobbs: 4190.2, notes: 'Campus ramp ready for dispatch', updatedAt: new Date().toISOString() },
 ];
 
+import { put, list } from '@vercel/blob';
+
 const STORAGE_KEY = 'rdm_fleet';
 let memoryFleet = [...SEED_DATA];
 
-// Initialize Redis / Vercel KV if environment variables are provided
+// Initialize Redis / Upstash / Vercel KV if environment variables are provided
 let redis = null;
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
@@ -44,34 +46,70 @@ if (redisUrl && redisToken) {
   try {
     redis = new Redis({ url: redisUrl, token: redisToken });
   } catch (err) {
-    console.warn('Could not initialize Redis client, using in-memory store:', err);
+    console.warn('Could not initialize Redis client, using fallback store:', err);
   }
 }
 
 async function getFleet() {
+  // 1. Try Upstash Redis / KV
   if (redis) {
     try {
       const data = await redis.get(STORAGE_KEY);
       if (Array.isArray(data) && data.length > 0) {
         return data;
       }
-      // Initialize Redis with SEED_DATA on first run
       await redis.set(STORAGE_KEY, SEED_DATA);
       return SEED_DATA;
     } catch (err) {
       console.error('Redis read error:', err);
     }
   }
+
+  // 2. Try Vercel Blob
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const { blobs } = await list({ prefix: 'rdm-fleet.json' });
+      if (blobs && blobs.length > 0) {
+        const res = await fetch(blobs[0].url);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) return data;
+        }
+      }
+      await put('rdm-fleet.json', JSON.stringify(SEED_DATA), {
+        access: 'public',
+        addRandomSuffix: false,
+      });
+      return SEED_DATA;
+    } catch (err) {
+      console.error('Blob read error:', err);
+    }
+  }
+
   return memoryFleet;
 }
 
 async function saveFleet(newFleet) {
   memoryFleet = newFleet;
+
+  // Save to Redis if available
   if (redis) {
     try {
       await redis.set(STORAGE_KEY, newFleet);
     } catch (err) {
       console.error('Redis write error:', err);
+    }
+  }
+
+  // Save to Vercel Blob if available
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      await put('rdm-fleet.json', JSON.stringify(newFleet), {
+        access: 'public',
+        addRandomSuffix: false,
+      });
+    } catch (err) {
+      console.error('Blob write error:', err);
     }
   }
 }
