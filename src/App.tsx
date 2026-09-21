@@ -153,9 +153,8 @@ export const App: React.FC = () => {
         />
 
         {/* Minimal Footer */}
-        <footer className="py-3 text-center text-xs text-slate-400 space-y-0.5">
-          <div>RDM Fleet Tracker • Hillsboro Aero Academy Redmond Campus</div>
-          <div className="text-[11px] text-slate-500">
+        <footer className="py-3 text-center text-xs text-slate-400">
+          <div className="text-[11px] text-slate-400">
             © Mingyun 'John' Kim. All rights reserved.
           </div>
         </footer>
