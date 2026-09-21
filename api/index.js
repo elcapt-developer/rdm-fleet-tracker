@@ -39,8 +39,18 @@ let memoryFleet = [...SEED_DATA];
 
 // Initialize Redis / Upstash / Vercel KV if environment variables are provided
 let redis = null;
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+const redisUrl =
+  process.env.STORAGE_REST_API_URL ||
+  process.env.UPSTASH_REDIS_REST_URL ||
+  process.env.STORAGE_URL ||
+  process.env.KV_REST_API_URL ||
+  process.env.REDIS_URL;
+
+const redisToken =
+  process.env.STORAGE_REST_API_TOKEN ||
+  process.env.UPSTASH_REDIS_REST_TOKEN ||
+  process.env.STORAGE_TOKEN ||
+  process.env.KV_REST_API_TOKEN;
 
 if (redisUrl && redisToken) {
   try {
