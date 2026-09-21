@@ -20,11 +20,42 @@ export const Header: React.FC<HeaderProps> = ({
   setSearchQuery,
   totalCount,
 }) => {
-  const formattedTime = lastUpdatedTime.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  const formatLastUpdated = (date: Date) => {
+    const now = new Date();
+    const isToday =
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate();
+
+    const timeStr = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    if (isToday) {
+      return timeStr;
+    }
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday =
+      date.getFullYear() === yesterday.getFullYear() &&
+      date.getMonth() === yesterday.getMonth() &&
+      date.getDate() === yesterday.getDate();
+
+    if (isYesterday) {
+      return `Yesterday, ${timeStr}`;
+    }
+
+    const dateStr = date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+    return `${dateStr}, ${timeStr}`;
+  };
+
+  const formattedTime = formatLastUpdated(lastUpdatedTime);
 
   return (
     <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2.5 sticky top-0 z-30 shadow-xs">

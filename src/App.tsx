@@ -99,15 +99,15 @@ export const App: React.FC = () => {
   };
 
   const lastUpdatedTime = useMemo(() => {
-    let latest = lastSyncTime.getTime();
+    let latest = 0;
     for (const p of fleet) {
       if (p.updatedAt) {
         const t = new Date(p.updatedAt).getTime();
         if (!isNaN(t) && t > latest) latest = t;
       }
     }
-    return new Date(latest);
-  }, [fleet, lastSyncTime]);
+    return latest > 0 ? new Date(latest) : new Date();
+  }, [fleet]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
