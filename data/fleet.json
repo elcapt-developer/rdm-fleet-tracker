@@ -1,0 +1,253 @@
+[
+  {
+    "id": "plane-49191",
+    "tailNumber": "49191",
+    "type": "152",
+    "location": "Madras",
+    "status": "Up",
+    "hoursRemaining": 65.4,
+    "totalHobbs": 4120.6,
+    "notes": "Tie-down row B",
+    "updatedAt": "2026-09-21T01:11:55.928Z"
+  },
+  {
+    "id": "plane-5318M",
+    "tailNumber": "5318M",
+    "type": "152",
+    "location": "Madras",
+    "status": "Up-Low Hours",
+    "hoursRemaining": 3.8,
+    "totalHobbs": 3892.4,
+    "notes": "Low hours before 100hr MX. Priority for local flights.",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-606GS",
+    "tailNumber": "606GS",
+    "type": "152",
+    "location": "Madras",
+    "status": "Up",
+    "hoursRemaining": 42.1,
+    "totalHobbs": 5214,
+    "notes": "Clean runup, oil topped",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-6342L",
+    "tailNumber": "6342L",
+    "type": "152",
+    "location": "Madras",
+    "status": "Up",
+    "hoursRemaining": 78.5,
+    "totalHobbs": 2980.2,
+    "notes": "Parked near fuel island",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-68713",
+    "tailNumber": "68713",
+    "type": "152",
+    "location": "Madras",
+    "status": "Up",
+    "hoursRemaining": 51,
+    "totalHobbs": 4610.8,
+    "notes": "Ready for pattern work",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-18AC",
+    "tailNumber": "18AC",
+    "type": "172",
+    "location": "Madras",
+    "status": "Up",
+    "hoursRemaining": 34.2,
+    "totalHobbs": 6105.3,
+    "notes": "G1000 equipped, IFR current",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-3555L",
+    "tailNumber": "3555L",
+    "type": "172",
+    "location": "Sky Service",
+    "status": "Up",
+    "hoursRemaining": 18.5,
+    "totalHobbs": 3412.7,
+    "enrouteTo": "Sky Service",
+    "eta": "18:15",
+    "notes": "Cross-country returning from Madras to RDM",
+    "updatedAt": "2026-09-21T01:21:05.212Z"
+  },
+  {
+    "id": "plane-436SP",
+    "tailNumber": "436SP",
+    "type": "172",
+    "location": "Madras",
+    "status": "Up-Enroute",
+    "hoursRemaining": 22,
+    "totalHobbs": 4890.1,
+    "enrouteTo": "Sky Service",
+    "eta": "18:30",
+    "notes": "Commercial training stage check flight",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-24373",
+    "tailNumber": "24373",
+    "type": "152",
+    "location": "Sky Service",
+    "status": "Up",
+    "hoursRemaining": 88,
+    "totalHobbs": 3205.5,
+    "notes": "Fresh 100hr inspection signed off",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-48521",
+    "tailNumber": "48521",
+    "type": "152",
+    "location": "Sky Service",
+    "status": "Up",
+    "hoursRemaining": 14.5,
+    "totalHobbs": 4402.1,
+    "notes": "Inspection scheduled later this week",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-6400Q",
+    "tailNumber": "6400Q",
+    "type": "152",
+    "location": "Sky Service",
+    "status": "Up-Enroute",
+    "hoursRemaining": 19.3,
+    "totalHobbs": 5120.9,
+    "enrouteTo": "Madras",
+    "eta": "18:45",
+    "notes": "Transit flight to Madras practice area",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-54477",
+    "tailNumber": "54477",
+    "type": "172",
+    "location": "Sky Service",
+    "status": "Down",
+    "hoursRemaining": 0,
+    "totalHobbs": 5800,
+    "squawks": [
+      "100-Hour Inspection Due",
+      "Awaiting spark plug replacement"
+    ],
+    "notes": "AOG - Do not dispatch until MX signoff",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-403SP",
+    "tailNumber": "403SP",
+    "type": "172",
+    "location": "Sky Service",
+    "status": "Up",
+    "hoursRemaining": 45,
+    "totalHobbs": 3950.4,
+    "notes": "Parked spot 4",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-4203P",
+    "tailNumber": "4203P",
+    "type": "172",
+    "location": "Sky Service",
+    "status": "Up",
+    "hoursRemaining": 62.4,
+    "totalHobbs": 4310.2,
+    "notes": "Full fuel tanks",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-52013",
+    "tailNumber": "52013",
+    "type": "172",
+    "location": "Sky Service",
+    "status": "Up",
+    "hoursRemaining": 31.8,
+    "totalHobbs": 4780,
+    "notes": "Available for instrument dual",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-589SP",
+    "tailNumber": "589SP",
+    "type": "172",
+    "location": "Sky Service",
+    "status": "Up",
+    "hoursRemaining": 57.2,
+    "totalHobbs": 3670.3,
+    "notes": "Spot 7 north ramp",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-125MG",
+    "tailNumber": "125MG",
+    "type": "PA44",
+    "location": "Sky Service",
+    "status": "Up",
+    "hoursRemaining": 71.6,
+    "totalHobbs": 2150.5,
+    "notes": "Multi-engine commercial / MEI training ready",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-446PA",
+    "tailNumber": "446PA",
+    "type": "PA44",
+    "location": "Sky Service",
+    "status": "Down",
+    "hoursRemaining": 0,
+    "totalHobbs": 2890,
+    "squawks": [
+      "Left engine cylinder inspection",
+      "Right cowl flap link adjustment"
+    ],
+    "notes": "Down for scheduled engine work",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-552MD",
+    "tailNumber": "552MD",
+    "type": "PA44",
+    "location": "Sky Service",
+    "status": "Down",
+    "hoursRemaining": 0,
+    "totalHobbs": 3100,
+    "squawks": [
+      "100-Hour Inspection in progress"
+    ],
+    "notes": "Hangar staging, MX underway",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-52371",
+    "tailNumber": "52371",
+    "type": "172",
+    "location": "HAA Campus",
+    "status": "Down",
+    "hoursRemaining": 0,
+    "totalHobbs": 6240,
+    "squawks": [
+      "100-Hour Inspection & Avionics check"
+    ],
+    "notes": "Inside main maintenance bay",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  },
+  {
+    "id": "plane-5366M",
+    "tailNumber": "5366M",
+    "type": "152",
+    "location": "HAA Campus",
+    "status": "Up",
+    "hoursRemaining": 82.5,
+    "totalHobbs": 4190.2,
+    "notes": "Campus ramp ready for dispatch",
+    "updatedAt": "2026-09-21T01:11:55.929Z"
+  }
+]
