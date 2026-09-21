@@ -22,6 +22,7 @@ export function useFleetSync() {
   const [recentNotification, setRecentNotification] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<number | null>(null);
+  const deletedIdsRef = useRef<Map<string, number>>(new Map());
 
   // Sync state to LocalStorage as instant cache
   const updateLocalState = useCallback((newFleet: Aircraft[]) => {
@@ -33,6 +34,64 @@ export function useFleetSync() {
     }
   }, []);
 
+  // Smart Merge: Merge server fleet with local state using updatedAt timestamps to prevent rollback from Edge Cache / polling
+  const mergeFleetData = useCallback((serverFleet: Aircraft[]) => {
+    setFleet((currentFleet) => {
+      const currentMap = new Map(currentFleet.map((p) => [p.id, p]));
+      const serverIds = new Set(serverFleet.map((p) => p.id));
+      const merged: Aircraft[] = [];
+      const now = Date.now();
+
+      // Clean up old deleted IDs (older than 30s)
+      for (const [delId, time] of deletedIdsRef.current.entries()) {
+        if (now - time > 30000) {
+          deletedIdsRef.current.delete(delId);
+        }
+      }
+
+      for (const sPlane of serverFleet) {
+        // Skip if this plane was deleted locally recently (prevents ghost recreation from edge cache)
+        if (deletedIdsRef.current.has(sPlane.id)) {
+          continue;
+        }
+
+        const cPlane = currentMap.get(sPlane.id);
+        if (!cPlane) {
+          merged.push(sPlane);
+          continue;
+        }
+
+        const sTime = sPlane.updatedAt ? new Date(sPlane.updatedAt).getTime() : 0;
+        const cTime = cPlane.updatedAt ? new Date(cPlane.updatedAt).getTime() : 0;
+
+        // Prevent rollback: If local has a newer modification time than server's cached response,
+        // keep local optimistic state!
+        if (cTime > sTime) {
+          merged.push(cPlane);
+        } else {
+          merged.push(sPlane);
+        }
+      }
+
+      // Preserve newly added planes that might not have hit the cache yet (within 15s)
+      for (const cPlane of currentFleet) {
+        if (!serverIds.has(cPlane.id) && !deletedIdsRef.current.has(cPlane.id)) {
+          const cTime = cPlane.updatedAt ? new Date(cPlane.updatedAt).getTime() : 0;
+          if (now - cTime < 15000) {
+            merged.push(cPlane);
+          }
+        }
+      }
+
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      } catch (e) {
+        console.warn('Failed to save to localStorage:', e);
+      }
+      return merged;
+    });
+  }, []);
+
   const notifyUser = useCallback((msg: string) => {
     setRecentNotification(msg);
     setTimeout(() => {
@@ -40,19 +99,25 @@ export function useFleetSync() {
     }, 4000);
   }, []);
 
-  // Fetch initial fleet via REST as quick backup
+  // Fetch initial fleet via REST with cache bypass and Smart Merge
   const fetchFleetRest = useCallback(async () => {
     try {
-      const res = await fetch('/api/fleet');
+      const res = await fetch('/api/fleet', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      });
       if (res.ok) {
         const data: Aircraft[] = await res.json();
-        updateLocalState(data);
+        mergeFleetData(data);
         setLastSyncTime(new Date());
       }
     } catch {
       // Offline fallback already loaded from localStorage
     }
-  }, [updateLocalState]);
+  }, [mergeFleetData]);
 
   // Connect WebSocket
   useEffect(() => {
@@ -216,7 +281,15 @@ export function useFleetSync() {
       });
       if (res.ok) {
         const data = await res.json();
-        setFleet((prev) => prev.map((p) => (p.id === data.id ? data : p)));
+        setFleet((prev) => {
+          const next = prev.map((p) => (p.id === data.id ? data : p));
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+          } catch {
+            /* empty */
+          }
+          return next;
+        });
       }
     } catch {
       // Keep optimistic change
@@ -323,7 +396,15 @@ export function useFleetSync() {
       });
       if (res.ok) {
         const created = await res.json();
-        setFleet((prev) => [...prev, created]);
+        setFleet((prev) => {
+          const next = [...prev, created];
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+          } catch {
+            /* empty */
+          }
+          return next;
+        });
         return created;
       }
     } catch {
@@ -332,19 +413,38 @@ export function useFleetSync() {
         id: `plane-${Date.now()}`,
         updatedAt: new Date().toISOString(),
       };
-      setFleet((prev) => [...prev, fallback]);
+      setFleet((prev) => {
+        const next = [...prev, fallback];
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          /* empty */
+        }
+        return next;
+      });
       return fallback;
     }
   }, []);
 
   // Action: Delete Aircraft
   const deleteAircraft = useCallback(async (id: string) => {
+    // Record recently deleted ID so edge cache polling doesn't resurrect it
+    deletedIdsRef.current.set(id, Date.now());
+    setFleet((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        /* empty */
+      }
+      return next;
+    });
+
     try {
       await fetch(`/api/aircraft/${id}`, { method: 'DELETE' });
     } catch {
       /* empty */
     }
-    setFleet((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
   // Action: Reset Fleet

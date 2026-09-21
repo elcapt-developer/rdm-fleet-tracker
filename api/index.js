@@ -95,6 +95,7 @@ async function getFleet() {
       await put('rdm-fleet-v2.json', JSON.stringify(SEED_DATA), {
         access: 'public',
         addRandomSuffix: false,
+        allowOverwrite: true,
       });
       return SEED_DATA;
     } catch (err) {
@@ -123,6 +124,7 @@ async function saveFleet(newFleet) {
       await put('rdm-fleet-v2.json', JSON.stringify(newFleet), {
         access: 'public',
         addRandomSuffix: false,
+        allowOverwrite: true,
       });
     } catch (err) {
       console.error('Blob write error:', err);
@@ -136,8 +138,8 @@ app.use(express.json());
 
 // GET /api/fleet
 app.get(['/api/fleet', '/fleet'], async (req, res) => {
-  // Edge Cache: shields Redis and serverless invocations for concurrent viewers
-  res.setHeader('Cache-Control', 'public, s-maxage=3, stale-while-revalidate=6');
+  // Edge Cache: Shields Redis / Blob for concurrent viewers, but forbids browser local caching
+  res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=2, stale-while-revalidate=4, must-revalidate');
   const fleet = await getFleet();
   res.json(fleet);
 });
