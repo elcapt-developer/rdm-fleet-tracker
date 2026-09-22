@@ -136,6 +136,39 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// GET /api/status - diagnostic endpoint
+app.get(['/api/status', '/status'], async (req, res) => {
+  let blobError = null;
+  let blobCount = 0;
+  let redisError = null;
+
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const { blobs } = await list({ prefix: 'rdm-fleet-v2.json' });
+      blobCount = blobs.length;
+    } catch (e) {
+      blobError = e.message;
+    }
+  }
+
+  if (redis) {
+    try {
+      await redis.ping();
+    } catch (e) {
+      redisError = e.message;
+    }
+  }
+
+  res.json({
+    hasRedis: !!redis,
+    redisError,
+    hasBlobToken: !!process.env.BLOB_READ_WRITE_TOKEN,
+    blobCount,
+    blobError,
+    storageType: redis ? 'redis' : (process.env.BLOB_READ_WRITE_TOKEN ? 'blob' : 'in-memory-only'),
+  });
+});
+
 // GET /api/fleet
 app.get(['/api/fleet', '/fleet'], async (req, res) => {
   // Edge Cache: Shields Redis / Blob for concurrent viewers, but forbids browser local caching
