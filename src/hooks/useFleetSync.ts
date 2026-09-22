@@ -40,8 +40,9 @@ export function useFleetSync() {
   }, []);
 
   // Server-First Sync: The server (Vercel Blob) is the Single Source of Truth across all devices.
-  // We strictly adopt serverFleet, preserving local state ONLY for an aircraft that was
-  // modified in this specific tab within the last 2000ms.
+  // When polling /api/fleet, we adopt serverFleet.
+  // If an aircraft was edited locally in THIS tab recently, we protect it as long as the local edit
+  // is newer than the server response (i.e. server write hasn't arrived back yet).
   const syncServerFleet = useCallback((serverFleet: Aircraft[]) => {
     if (!Array.isArray(serverFleet) || serverFleet.length === 0) return;
 
@@ -50,12 +51,19 @@ export function useFleetSync() {
       const currentMap = new Map(currentFleet.map((p) => [p.id, p]));
 
       const nextFleet = serverFleet.map((sPlane) => {
+        const localPlane = currentMap.get(sPlane.id);
+        if (!localPlane) return sPlane;
+
+        const sTime = sPlane.updatedAt ? new Date(sPlane.updatedAt).getTime() : 0;
+        const lTime = localPlane.updatedAt ? new Date(localPlane.updatedAt).getTime() : 0;
+
         const inFlightTime = inFlightEditsRef.current.get(sPlane.id);
-        // If modified on THIS tab in the last 2.0s, keep optimistic edit
-        if (inFlightTime && now - inFlightTime < 2000) {
-          const localPlane = currentMap.get(sPlane.id);
-          if (localPlane) return localPlane;
+        // If modified on THIS tab in the last 10 seconds AND local version has newer timestamp,
+        // keep local until server catches up to prevent any 2-second rollback
+        if (inFlightTime && now - inFlightTime < 10000 && lTime > sTime) {
+          return localPlane;
         }
+
         return sPlane;
       });
 

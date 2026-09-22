@@ -30,6 +30,7 @@ const SEED_DATA = [
   // HAA Campus (Main Base & MX)
   { id: 'plane-52371', tailNumber: '52371', type: '172', location: 'HAA Campus', status: 'Down', hoursRemaining: 0.0, totalHobbs: 6240.0, squawks: ['100-Hour Inspection & Avionics check'], notes: 'Inside main maintenance bay', updatedAt: '2026-01-01T00:00:00.000Z' },
   { id: 'plane-5366M', tailNumber: '5366M', type: '152', location: 'HAA Campus', status: 'Up', hoursRemaining: 82.5, totalHobbs: 4190.2, notes: 'Campus ramp ready for dispatch', updatedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'plane-64942', tailNumber: '64942', type: '152', location: 'Madras', status: 'Up', hoursRemaining: 100.0, totalHobbs: 3500.0, notes: 'Tie-down row C', updatedAt: '2026-01-01T00:00:00.000Z' },
 ];
 
 import { put, list, del } from '@vercel/blob';
@@ -37,6 +38,11 @@ import { put, list, del } from '@vercel/blob';
 const STORAGE_KEY = 'rdm_fleet_v2';
 const BLOB_PREFIX = 'rdm-fleet-live-';
 let memoryFleet = [...SEED_DATA];
+
+function getBlobTimestamp(blob) {
+  const match = blob.pathname.match(/rdm-fleet-live-(\d+)\.json/);
+  return match ? Number(match[1]) : 0;
+}
 
 // Initialize Redis / Upstash / Vercel KV if environment variables are provided
 let redis = null;
@@ -89,13 +95,22 @@ async function getFleet() {
     try {
       const { blobs } = await list({ prefix: BLOB_PREFIX });
       if (blobs && blobs.length > 0) {
-        blobs.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
-        const res = await fetch(blobs[0].url, { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            memoryFleet = data;
-            return data;
+        // Sort descending by exact millisecond timestamp in pathname
+        blobs.sort((a, b) => getBlobTimestamp(b) - getBlobTimestamp(a));
+
+        // Attempt read from latest blob, with fallback to previous blobs
+        for (let i = 0; i < Math.min(blobs.length, 3); i++) {
+          try {
+            const res = await fetch(blobs[i].url, { cache: 'no-store' });
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data) && data.length > 0) {
+                memoryFleet = data;
+                return data;
+              }
+            }
+          } catch (fetchErr) {
+            console.warn(`Failed reading blob ${blobs[i].pathname}:`, fetchErr);
           }
         }
       }
@@ -113,8 +128,16 @@ async function getFleet() {
         }
       }
 
-      await saveFleet(SEED_DATA);
-      return SEED_DATA;
+      // If memoryFleet is already active in memory, return it without wiping!
+      if (memoryFleet && Array.isArray(memoryFleet) && memoryFleet.length > 0) {
+        return memoryFleet;
+      }
+
+      // Only seed if store is completely empty
+      if (!blobs || blobs.length === 0) {
+        await saveFleet(SEED_DATA);
+        return SEED_DATA;
+      }
     } catch (err) {
       console.error('Blob read error:', err);
     }
@@ -145,12 +168,17 @@ async function saveFleet(newFleet) {
         addRandomSuffix: false,
       });
 
-      // Cleanup older blobs asynchronously (keep latest 3)
+      // Safe cleanup: Keep latest 20 blobs.
+      // ONLY delete blobs older than 60 seconds so readers never get 404!
       list({ prefix: BLOB_PREFIX })
         .then(({ blobs }) => {
-          if (blobs && blobs.length > 3) {
-            blobs.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
-            const toDelete = blobs.slice(3).map((b) => b.url);
+          if (blobs && blobs.length > 20) {
+            blobs.sort((a, b) => getBlobTimestamp(b) - getBlobTimestamp(a));
+            const now = Date.now();
+            const toDelete = blobs
+              .slice(20)
+              .filter((b) => now - getBlobTimestamp(b) > 60000)
+              .map((b) => b.url);
             if (toDelete.length > 0) {
               del(toDelete).catch(() => {});
             }
