@@ -35,56 +35,46 @@ export function useFleetSync() {
     }
   }, []);
 
-  // Smart Merge: Merge server fleet with local state. Only protect aircraft modified in THIS tab within last 4s from Edge Cache rollback.
-  // All other aircraft updates from other users/tabs are accepted immediately!
+  // Smart Merge: Last-Write-Wins (LWW) based on updatedAt timestamps.
+  // Initial seed planes have updatedAt='2026-01-01'.
+  // Any modified plane receives current timestamp.
+  // This ensures modified planes NEVER revert to stale server seeds, while still accepting updates from others.
   const mergeFleetData = useCallback((serverFleet: Aircraft[]) => {
     setFleet((currentFleet) => {
       const currentMap = new Map(currentFleet.map((p) => [p.id, p]));
       const serverIds = new Set(serverFleet.map((p) => p.id));
       const merged: Aircraft[] = [];
-      const now = Date.now();
-
-      // Clean up old pending local updates (older than 4s)
-      for (const [id, time] of pendingLocalUpdatesRef.current.entries()) {
-        if (now - time > 4000) {
-          pendingLocalUpdatesRef.current.delete(id);
-        }
-      }
-
-      // Clean up old deleted IDs (older than 10s)
-      for (const [delId, time] of deletedIdsRef.current.entries()) {
-        if (now - time > 10000) {
-          deletedIdsRef.current.delete(delId);
-        }
-      }
 
       for (const sPlane of serverFleet) {
-        // Skip if this plane was deleted locally recently
+        // Skip if this plane was deleted locally in this browser
         if (deletedIdsRef.current.has(sPlane.id)) {
           continue;
         }
 
         const cPlane = currentMap.get(sPlane.id);
-        // Only if THIS tab has a pending optimistic update in the last 4s, check if local is newer
-        if (cPlane && pendingLocalUpdatesRef.current.has(sPlane.id)) {
-          const sTime = sPlane.updatedAt ? new Date(sPlane.updatedAt).getTime() : 0;
-          const cTime = cPlane.updatedAt ? new Date(cPlane.updatedAt).getTime() : 0;
-          if (cTime > sTime) {
-            merged.push(cPlane);
-            continue;
-          }
+        if (!cPlane) {
+          // New plane from server
+          merged.push(sPlane);
+          continue;
         }
 
-        // Otherwise, server data is the single source of truth!
-        merged.push(sPlane);
+        const sTime = sPlane.updatedAt ? new Date(sPlane.updatedAt).getTime() : 0;
+        const cTime = cPlane.updatedAt ? new Date(cPlane.updatedAt).getTime() : 0;
+
+        // If local version has a strictly newer timestamp than server, keep local!
+        // This permanently stops any reversion/rollback even if serverless instances restart.
+        if (cTime > sTime) {
+          merged.push(cPlane);
+        } else {
+          // Server is newer or equal, accept server truth
+          merged.push(sPlane);
+        }
       }
 
-      // Preserve newly added planes in this tab that haven't hit server yet
+      // Preserve newly added planes in local state that haven't hit server yet
       for (const cPlane of currentFleet) {
         if (!serverIds.has(cPlane.id) && !deletedIdsRef.current.has(cPlane.id)) {
-          if (pendingLocalUpdatesRef.current.has(cPlane.id)) {
-            merged.push(cPlane);
-          }
+          merged.push(cPlane);
         }
       }
 
