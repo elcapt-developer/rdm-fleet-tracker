@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { Redis } from '@upstash/redis';
 
 // Initial seed fleet data (21 aircraft across Madras, Sky Service, HAA Campus)
 const SEED_DATA = [
@@ -33,162 +32,82 @@ const SEED_DATA = [
   { id: 'plane-64942', tailNumber: '64942', type: '152', location: 'Madras', status: 'Up', hoursRemaining: 100.0, totalHobbs: 3500.0, notes: 'Tie-down row C', updatedAt: '2026-01-01T00:00:00.000Z' },
 ];
 
-import { put, list, del } from '@vercel/blob';
+const GITHUB_DB_TOKEN = process.env.GITHUB_DB_TOKEN;
+const GITHUB_DB_REPO = process.env.GITHUB_DB_REPO || 'elcapt-developer/rdm-fleet-tracker';
+const GITHUB_DB_ISSUE_NUMBER = process.env.GITHUB_DB_ISSUE_NUMBER || '1';
 
-const STORAGE_KEY = 'rdm_fleet_v2';
-const BLOB_PREFIX = 'rdm-fleet-live-';
 let memoryFleet = [...SEED_DATA];
+let lastFetchedAt = 0;
 
-function getBlobTimestamp(blob) {
-  const match = blob.pathname.match(/rdm-fleet-live-(\d+)\.json/);
-  return match ? Number(match[1]) : 0;
+async function fetchFromGitHubIssue() {
+  if (!GITHUB_DB_TOKEN) return null;
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_DB_REPO}/issues/${GITHUB_DB_ISSUE_NUMBER}`, {
+    headers: {
+      Authorization: `Bearer ${GITHUB_DB_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'RDMFleetTracker',
+    },
+  });
+  if (!res.ok) {
+    console.warn(`GitHub read returned ${res.status}`);
+    return null;
+  }
+  const issue = await res.json();
+  if (issue && issue.body) {
+    try {
+      const parsed = JSON.parse(issue.body);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch (e) {
+      console.error('Error parsing fleet json from issue body:', e);
+    }
+  }
+  return null;
 }
 
-// Initialize Redis / Upstash / Vercel KV if environment variables are provided
-let redis = null;
-const redisUrl =
-  process.env.FLEET_REST_API_URL ||
-  process.env.FLEET_URL ||
-  process.env.REDIS_REST_API_URL ||
-  process.env.STORAGE_REST_API_URL ||
-  process.env.UPSTASH_REDIS_REST_URL ||
-  process.env.STORAGE_URL ||
-  process.env.KV_REST_API_URL ||
-  process.env.REDIS_URL;
-
-const redisToken =
-  process.env.FLEET_REST_API_TOKEN ||
-  process.env.FLEET_TOKEN ||
-  process.env.REDIS_REST_API_TOKEN ||
-  process.env.STORAGE_REST_API_TOKEN ||
-  process.env.UPSTASH_REDIS_REST_TOKEN ||
-  process.env.STORAGE_TOKEN ||
-  process.env.KV_REST_API_TOKEN;
-
-if (redisUrl && redisToken) {
-  try {
-    redis = new Redis({ url: redisUrl, token: redisToken });
-  } catch (err) {
-    console.warn('Could not initialize Redis client, using fallback store:', err);
+async function saveToGitHubIssue(fleetData) {
+  if (!GITHUB_DB_TOKEN) return;
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_DB_REPO}/issues/${GITHUB_DB_ISSUE_NUMBER}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${GITHUB_DB_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'RDMFleetTracker',
+    },
+    body: JSON.stringify({
+      body: JSON.stringify(fleetData),
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('Failed saving to GitHub issue:', res.status, text);
+    throw new Error(`GitHub Issue Save Failed: ${res.status}`);
   }
 }
 
 async function getFleet() {
-  // 1. Try Upstash Redis / KV
-  if (redis) {
-    try {
-      const data = await redis.get(STORAGE_KEY);
-      if (Array.isArray(data) && data.length > 0) {
-        memoryFleet = data;
-        return data;
-      }
-      await redis.set(STORAGE_KEY, SEED_DATA);
-      memoryFleet = SEED_DATA;
-      return SEED_DATA;
-    } catch (err) {
-      console.error('Redis read error:', err);
+  try {
+    const data = await fetchFromGitHubIssue();
+    if (data && Array.isArray(data) && data.length > 0) {
+      memoryFleet = data;
+      lastFetchedAt = Date.now();
+      return data;
     }
+  } catch (err) {
+    console.warn('GitHub issue read error, falling back to memory:', err.message);
   }
 
-  // 2. Try Vercel Blob (Immutable timestamped blobs for 100% instant zero-delay consistency)
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      const { blobs } = await list({ prefix: BLOB_PREFIX });
-      if (blobs && blobs.length > 0) {
-        // Sort descending by exact millisecond timestamp in pathname
-        blobs.sort((a, b) => getBlobTimestamp(b) - getBlobTimestamp(a));
-
-        // Attempt read from latest blob, with fallback to previous blobs
-        for (let i = 0; i < Math.min(blobs.length, 3); i++) {
-          try {
-            const res = await fetch(blobs[i].url, { cache: 'no-store' });
-            if (res.ok) {
-              const data = await res.json();
-              if (Array.isArray(data) && data.length > 0) {
-                memoryFleet = data;
-                return data;
-              }
-            }
-          } catch (fetchErr) {
-            console.warn(`Failed reading blob ${blobs[i].pathname}:`, fetchErr);
-          }
-        }
-      }
-
-      // Check legacy blob once if live blobs not yet created
-      const { blobs: legacyBlobs } = await list({ prefix: 'rdm-fleet-v2.json' });
-      if (legacyBlobs && legacyBlobs.length > 0) {
-        const res = await fetch(`${legacyBlobs[0].url}?t=${Date.now()}`, { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            await saveFleet(data);
-            return data;
-          }
-        }
-      }
-
-      // If memoryFleet is already active in memory, return it without wiping!
-      if (memoryFleet && Array.isArray(memoryFleet) && memoryFleet.length > 0) {
-        return memoryFleet;
-      }
-
-      // Only seed if store is completely empty
-      if (!blobs || blobs.length === 0) {
-        await saveFleet(SEED_DATA);
-        return SEED_DATA;
-      }
-    } catch (err) {
-      console.error('Blob read error:', err);
-    }
-  }
-
-  return memoryFleet || SEED_DATA;
+  return memoryFleet && memoryFleet.length > 0 ? memoryFleet : SEED_DATA;
 }
 
 async function saveFleet(newFleet) {
   memoryFleet = newFleet;
-
-  // Save to Redis if available
-  if (redis) {
-    try {
-      await redis.set(STORAGE_KEY, newFleet);
-    } catch (err) {
-      console.error('Redis write error:', err);
-    }
-  }
-
-  // Save to Vercel Blob (Immutable blob URL to immediately bypass CDN cache)
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      const timestamp = Date.now();
-      const newBlobName = `${BLOB_PREFIX}${timestamp}.json`;
-      await put(newBlobName, JSON.stringify(newFleet), {
-        access: 'public',
-        addRandomSuffix: false,
-      });
-
-      // Safe cleanup: Keep latest 20 blobs.
-      // ONLY delete blobs older than 60 seconds so readers never get 404!
-      list({ prefix: BLOB_PREFIX })
-        .then(({ blobs }) => {
-          if (blobs && blobs.length > 20) {
-            blobs.sort((a, b) => getBlobTimestamp(b) - getBlobTimestamp(a));
-            const now = Date.now();
-            const toDelete = blobs
-              .slice(20)
-              .filter((b) => now - getBlobTimestamp(b) > 60000)
-              .map((b) => b.url);
-            if (toDelete.length > 0) {
-              del(toDelete).catch(() => {});
-            }
-          }
-        })
-        .catch(() => {});
-    } catch (err) {
-      console.error('Blob write error:', err);
-      throw err;
-    }
+  try {
+    await saveToGitHubIssue(newFleet);
+  } catch (err) {
+    console.error('saveFleet GitHub error (persisting in memory):', err.message);
   }
 }
 
@@ -216,40 +135,28 @@ app.use(express.json());
 
 // GET /api/status - diagnostic endpoint
 app.get(['/api/status', '/status'], async (req, res) => {
-  let blobError = null;
-  let blobCount = 0;
-  let latestBlob = null;
-  let redisError = null;
+  let connected = false;
+  let error = null;
+  let count = 0;
 
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      const { blobs } = await list({ prefix: BLOB_PREFIX });
-      blobCount = blobs.length;
-      if (blobs.length > 0) {
-        blobs.sort((a, b) => getBlobTimestamp(b) - getBlobTimestamp(a));
-        latestBlob = blobs[0].pathname;
-      }
-    } catch (e) {
-      blobError = e.message;
+  try {
+    const data = await fetchFromGitHubIssue();
+    if (data) {
+      connected = true;
+      count = data.length;
     }
-  }
-
-  if (redis) {
-    try {
-      await redis.ping();
-    } catch (e) {
-      redisError = e.message;
-    }
+  } catch (e) {
+    error = e.message;
   }
 
   res.json({
-    hasRedis: !!redis,
-    redisError,
-    hasBlobToken: !!process.env.BLOB_READ_WRITE_TOKEN,
-    blobCount,
-    latestBlob,
-    blobError,
-    storageType: redis ? 'redis' : (process.env.BLOB_READ_WRITE_TOKEN ? 'blob' : 'in-memory-only'),
+    status: 'ok',
+    storageType: 'github-cloud-db',
+    repo: GITHUB_DB_REPO,
+    issueNumber: GITHUB_DB_ISSUE_NUMBER,
+    connected,
+    fleetCount: count,
+    error,
   });
 });
 
