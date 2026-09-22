@@ -245,6 +245,23 @@ app.post('/api/aircraft/:id/complete-100hr', (req, res) => {
   res.json(updated);
 });
 
+// PUT /api/fleet - Full fleet atomic save endpoint
+app.put('/api/fleet', (req, res) => {
+  const incoming = req.body;
+  if (!Array.isArray(incoming) || incoming.length === 0) {
+    return res.status(400).json({ error: 'Expected non-empty array of aircraft' });
+  }
+
+  const nowIso = new Date().toISOString();
+  fleet = incoming.map((plane) => ({
+    ...plane,
+    updatedAt: nowIso,
+  }));
+  saveFleet(fleet);
+  broadcast({ type: 'INIT_FLEET', payload: fleet });
+  res.json({ message: 'Fleet successfully saved', fleet, savedAt: nowIso });
+});
+
 // POST /api/reset-fleet
 app.post('/api/reset-fleet', (req, res) => {
   fleet = JSON.parse(JSON.stringify(SEED_DATA));

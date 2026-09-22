@@ -16,7 +16,12 @@ function isFleetEqual(a: Aircraft[], b: Aircraft[]): boolean {
       pa.status !== pb.status ||
       pa.tailNumber !== pb.tailNumber ||
       pa.type !== pb.type ||
-      pa.notes !== pb.notes
+      pa.notes !== pb.notes ||
+      pa.updatedAt !== pb.updatedAt ||
+      pa.hoursRemaining !== pb.hoursRemaining ||
+      pa.totalHobbs !== pb.totalHobbs ||
+      pa.enrouteTo !== pb.enrouteTo ||
+      pa.eta !== pb.eta
     ) {
       return false;
     }
@@ -213,10 +218,19 @@ export function useFleetSync() {
   // Action: SAVE ALL CHANGES (Atomic snapshot commit to database)
   const saveChanges = useCallback(async (): Promise<boolean> => {
     setIsSaving(true);
-    try {
-      const nowIso = new Date().toISOString();
-      const payload = fleet.map((p) => ({ ...p, updatedAt: nowIso }));
+    const saveTime = new Date().toISOString();
+    const payload = fleet.map((p) => ({ ...p, updatedAt: saveTime }));
 
+    // Instant optimistic update: state and last updated timestamp flip in 0ms
+    setFleet(payload);
+    hasUnsavedChangesRef.current = false;
+    setHasUnsavedChanges(false);
+    setLastSyncTime(new Date());
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch {}
+
+    try {
       const res = await fetch('/api/fleet', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -224,18 +238,25 @@ export function useFleetSync() {
       });
 
       if (res.ok) {
-        setHasUnsavedChanges(false);
-        setIsSaving(false);
+        const data = await res.json();
+        const finalFleet = Array.isArray(data.fleet) ? data.fleet : payload;
+        setFleet(finalFleet);
         setLastSyncTime(new Date());
+        setIsSaving(false);
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(finalFleet));
         } catch {}
         return true;
       }
+      // If server error, restore unsaved indicator so user can retry
+      setHasUnsavedChanges(true);
+      hasUnsavedChangesRef.current = true;
       setIsSaving(false);
       return false;
     } catch (e) {
       console.error('Failed to save fleet changes:', e);
+      setHasUnsavedChanges(true);
+      hasUnsavedChangesRef.current = true;
       setIsSaving(false);
       return false;
     }

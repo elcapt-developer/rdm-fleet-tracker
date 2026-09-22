@@ -30,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
     const timeStr = date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
+      second: '2-digit',
       hour12: true,
     });
 
@@ -77,7 +78,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          <div className="text-xs text-slate-400 font-medium">
+          <div className="text-xs text-slate-400 font-medium" title={`Last saved: ${lastUpdatedTime.toLocaleString()}`}>
             Last updated: <span className="text-slate-700 font-semibold">{formattedTime}</span>
           </div>
         </div>

@@ -232,13 +232,16 @@ app.put(['/api/fleet', '/fleet'], async (req, res) => {
   }
 
   const nowIso = new Date().toISOString();
+  // Stamp all planes with the exact save time so the latest save is unconditionally applied
   const stampedFleet = incoming.map((plane) => ({
     ...plane,
-    updatedAt: plane.updatedAt || nowIso,
+    updatedAt: plane.updatedAt && new Date(plane.updatedAt).getTime() > new Date(nowIso).getTime() - 60000
+      ? plane.updatedAt
+      : nowIso,
   }));
 
   await saveFleet(stampedFleet);
-  res.json({ message: 'Fleet successfully saved', fleet: stampedFleet });
+  res.json({ message: 'Fleet successfully saved', fleet: stampedFleet, savedAt: nowIso });
 });
 
 // DELETE /api/aircraft/:id
