@@ -74,7 +74,7 @@ export const App: React.FC = () => {
     if (isEditMode) {
       if (hasUnsavedChanges) {
         const confirmExit = window.confirm(
-          '저장되지 않은 변경사항이 있습니다. 저장하지 않고 나가시겠습니까?'
+          'You have unsaved changes. Are you sure you want to exit without saving?'
         );
         if (!confirmExit) return;
         discardChanges();
@@ -129,18 +129,18 @@ export const App: React.FC = () => {
   const handleSave = async () => {
     const success = await saveChanges();
     if (success) {
-      setToastMessage('✅ 모든 변경사항이 성공적으로 저장되었습니다!');
+      setToastMessage('✅ All changes saved successfully!');
       setTimeout(() => setToastMessage(null), 3500);
     } else {
-      alert('저장 중 통신 오류가 발생했습니다. 다시 시도해주세요.');
+      alert('Network error while saving changes. Please try again.');
     }
   };
 
   // Discard changes
   const handleDiscard = async () => {
-    if (window.confirm('저장하지 않은 모든 변경사항을 취소하고 원래대로 되돌리시겠습니까?')) {
+    if (window.confirm('Discard all unsaved changes and revert to server state?')) {
       await discardChanges();
-      setToastMessage('이전 저장 상태로 되돌렸습니다.');
+      setToastMessage('Reverted to previously saved state.');
       setTimeout(() => setToastMessage(null), 3000);
     }
   };
@@ -199,11 +199,11 @@ export const App: React.FC = () => {
               <div>
                 {hasUnsavedChanges ? (
                   <span>
-                    <strong>저장되지 않은 변경사항이 있습니다.</strong> 기체 이동 및 수정을 마친 후 우측 <strong>[저장]</strong> 버튼을 눌러주세요. (단축키: <kbd className="px-1.5 py-0.5 bg-amber-200/70 border border-amber-300 rounded text-[11px] font-mono">⌘+S</kbd> / <kbd className="px-1.5 py-0.5 bg-amber-200/70 border border-amber-300 rounded text-[11px] font-mono">Ctrl+S</kbd>)
+                    <strong>Unsaved changes pending.</strong> When finished, click <strong>[Save Changes]</strong> to update the database. (Shortcut: <kbd className="px-1.5 py-0.5 bg-amber-200/70 border border-amber-300 rounded text-[11px] font-mono">⌘+S</kbd> / <kbd className="px-1.5 py-0.5 bg-amber-200/70 border border-amber-300 rounded text-[11px] font-mono">Ctrl+S</kbd>)
                   </span>
                 ) : (
                   <span>
-                    <strong>디스패치 편집 모드 활성화</strong>: 자유롭게 기체를 드래그하거나 상태 및 위치를 변경하세요.
+                    <strong>Dispatch Edit Mode Active</strong>: Drag and drop aircraft or update status and location freely.
                   </span>
                 )}
               </div>
@@ -219,7 +219,7 @@ export const App: React.FC = () => {
                     className="px-3 py-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 rounded-lg font-semibold transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>취소</span>
+                    <span>Discard</span>
                   </button>
                   <button
                     onClick={handleSave}
@@ -229,12 +229,12 @@ export const App: React.FC = () => {
                     {isSaving ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>클라우드 저장 중...</span>
+                        <span>Saving...</span>
                       </>
                     ) : (
                       <>
                         <Save className="w-3.5 h-3.5" />
-                        <span>변경사항 저장 (Save)</span>
+                        <span>Save Changes</span>
                       </>
                     )}
                   </button>
@@ -245,7 +245,7 @@ export const App: React.FC = () => {
                 className="px-2.5 py-1.5 text-slate-500 hover:text-slate-800 underline font-medium cursor-pointer flex items-center gap-1 ml-1"
               >
                 <Lock className="w-3 h-3" />
-                <span>편집 종료</span>
+                <span>Exit Edit Mode</span>
               </button>
             </div>
           </div>
