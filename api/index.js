@@ -128,6 +128,7 @@ async function saveFleet(newFleet) {
       });
     } catch (err) {
       console.error('Blob write error:', err);
+      throw err;
     }
   }
 }
@@ -169,10 +170,11 @@ app.get(['/api/status', '/status'], async (req, res) => {
   });
 });
 
-// GET /api/fleet
+// GET /api/fleet - Real-time endpoint without stale CDN cache
 app.get(['/api/fleet', '/fleet'], async (req, res) => {
-  // Edge Cache: Shields Redis / Blob for concurrent viewers, but forbids browser local caching
-  res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=2, stale-while-revalidate=4, must-revalidate');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   const fleet = await getFleet();
   res.json(fleet);
 });
