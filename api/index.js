@@ -317,16 +317,21 @@ app.put(['/api/aircraft/:id', '/aircraft/:id'], async (req, res) => {
   res.json(updatedPlane);
 });
 
-// PUT /api/fleet - Full fleet sync endpoint
+// PUT /api/fleet - Full fleet atomic save endpoint (Used by SAVE button)
 app.put(['/api/fleet', '/fleet'], async (req, res) => {
   const incoming = req.body;
-  if (!Array.isArray(incoming)) {
-    return res.status(400).json({ error: 'Expected array of aircraft' });
+  if (!Array.isArray(incoming) || incoming.length === 0) {
+    return res.status(400).json({ error: 'Expected non-empty array of aircraft' });
   }
-  const currentFleet = await getFleet();
-  const merged = mergeAircraftArrays(currentFleet, incoming);
-  await saveFleet(merged);
-  res.json(merged);
+
+  const nowIso = new Date().toISOString();
+  const stampedFleet = incoming.map((plane) => ({
+    ...plane,
+    updatedAt: plane.updatedAt || nowIso,
+  }));
+
+  await saveFleet(stampedFleet);
+  res.json({ message: 'Fleet successfully saved', fleet: stampedFleet });
 });
 
 // DELETE /api/aircraft/:id

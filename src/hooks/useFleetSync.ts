@@ -40,52 +40,34 @@ export function useFleetSync() {
 
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'offline'>('connected');
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  // Timestamp of the last local edit on THIS browser tab
-  const lastLocalEditTimeRef = useRef<number>(0);
+  // Keep a ref of hasUnsavedChanges for interval callbacks
+  const hasUnsavedChangesRef = useRef<boolean>(false);
+  hasUnsavedChangesRef.current = hasUnsavedChanges;
 
-  // Synchronize server fleet into local state without conflict or flicker
+  // Synchronize server fleet into local state (Only when there are NO unsaved local changes)
   const syncServerFleet = useCallback((serverFleet: Aircraft[]) => {
     if (!Array.isArray(serverFleet) || serverFleet.length === 0) return;
+    if (hasUnsavedChangesRef.current) return; // Never overwrite while user has unsaved edits!
 
     setFleet((currentFleet) => {
-      const currentMap = new Map(currentFleet.map((p) => [p.id, p]));
-
-      // 1. Only keep planes that exist on the server (deleted planes stay deleted)
-      const nextFleet = serverFleet.map((sPlane) => {
-        const localPlane = currentMap.get(sPlane.id);
-        if (!localPlane) return sPlane;
-
-        const sTime = sPlane.updatedAt ? new Date(sPlane.updatedAt).getTime() : 0;
-        const lTime = localPlane.updatedAt ? new Date(localPlane.updatedAt).getTime() : 0;
-
-        // If local plane was updated more recently on THIS device, DO NOT revert!
-        // Keep local version until server catches up.
-        if (lTime > sTime) {
-          return localPlane;
-        }
-
-        // Server has equal or newer timestamp, adopt server truth
-        return sPlane;
-      });
-
-      // 2. If nothing actually changed on the board, return current reference!
-      // This completely stops React re-render jitter and input flickering!
-      if (isFleetEqual(currentFleet, nextFleet)) {
+      if (isFleetEqual(currentFleet, serverFleet)) {
         return currentFleet;
       }
-
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextFleet));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(serverFleet));
       } catch (e) {
         console.warn('Failed to save to localStorage:', e);
       }
-      return nextFleet;
+      return serverFleet;
     });
   }, []);
 
   // Fetch live fleet from API
   const fetchFleetRest = useCallback(async () => {
+    if (hasUnsavedChangesRef.current) return;
     try {
       const res = await fetch(`/api/fleet?_t=${Date.now()}`, {
         cache: 'no-store',
@@ -107,44 +89,32 @@ export function useFleetSync() {
     }
   }, [syncServerFleet]);
 
-  // Polling lifecycle
+  // Polling lifecycle: every 4 seconds when idle and no unsaved changes
   useEffect(() => {
     let isUnmounted = false;
 
-    // Initial fetch
     fetchFleetRest();
 
-    // Poll every 3.5 seconds
     const pollInterval = window.setInterval(() => {
       if (isUnmounted) return;
-
-      // CRITICAL: Pause polling for 5 seconds after a user action in this tab!
-      // This gives the server time to replicate and guarantees zero collision/flicker.
-      const timeSinceLocalEdit = Date.now() - lastLocalEditTimeRef.current;
-      if (timeSinceLocalEdit < 5000) {
-        return;
-      }
+      if (hasUnsavedChangesRef.current) return; // 100% pause during active edits
 
       if (document.visibilityState === 'visible') {
         fetchFleetRest();
       }
-    }, 3500);
+    }, 4000);
 
-    // Immediate refresh on tab focus (e.g. unlocking phone or switching back)
     const handleFocus = () => {
-      if (!isUnmounted && document.visibilityState === 'visible') {
-        const timeSinceLocalEdit = Date.now() - lastLocalEditTimeRef.current;
-        if (timeSinceLocalEdit >= 5000) {
-          fetchFleetRest();
-        }
+      if (!isUnmounted && document.visibilityState === 'visible' && !hasUnsavedChangesRef.current) {
+        fetchFleetRest();
       }
     };
     document.addEventListener('visibilitychange', handleFocus);
     window.addEventListener('focus', handleFocus);
 
-    // 0ms instant sync across multiple tabs on the same device
+    // Instant sync across tabs on same device if no unsaved changes
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
+      if (e.key === STORAGE_KEY && e.newValue && !hasUnsavedChangesRef.current) {
         try {
           const updatedFleet: Aircraft[] = JSON.parse(e.newValue);
           if (Array.isArray(updatedFleet) && updatedFleet.length > 0) {
@@ -164,119 +134,148 @@ export function useFleetSync() {
     };
   }, [fetchFleetRest]);
 
-  // Action: Update Aircraft (Status, Location, Notes)
-  const updateAircraft = useCallback(async (updates: Partial<Aircraft> & { id: string }) => {
-    // Record local edit timestamp to pause polling and protect from rollback
-    lastLocalEditTimeRef.current = Date.now();
-    const nowIso = new Date().toISOString();
-    const payload = { ...updates, updatedAt: nowIso };
+  // Warn on accidental tab close/refresh if unsaved
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
-    // 0ms Instant Optimistic UI update
+  // Action: Move Location (0ms local stage)
+  const moveLocation = useCallback(
+    (id: string, newLocation: AirportLocation) => {
+      setFleet((prev) => {
+        const target = prev.find((p) => p.id === id);
+        if (!target || target.location === newLocation) return prev;
+
+        let newStatus = target.status;
+        if (target.status === 'Up-Enroute') {
+          newStatus = 'Up';
+        }
+
+        const nowIso = new Date().toISOString();
+        const next = prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                location: newLocation,
+                status: newStatus,
+                enrouteTo: undefined,
+                eta: undefined,
+                updatedAt: nowIso,
+              }
+            : p
+        );
+        return next;
+      });
+      setHasUnsavedChanges(true);
+    },
+    []
+  );
+
+  // Action: Change Status (0ms local stage)
+  const updateStatus = useCallback((id: string, newStatus: AircraftStatus) => {
     setFleet((prev) => {
-      const next = prev.map((p) => (p.id === updates.id ? { ...p, ...payload } : p));
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {}
-      return next;
+      const nowIso = new Date().toISOString();
+      return prev.map((p) => (p.id === id ? { ...p, status: newStatus, updatedAt: nowIso } : p));
     });
+    setHasUnsavedChanges(true);
+  }, []);
 
+  // Action: Add Aircraft (0ms local stage)
+  const addAircraft = useCallback((aircraftData: Omit<Aircraft, 'id' | 'updatedAt'>) => {
+    const cleanTail = aircraftData.tailNumber.trim().toUpperCase().replace(/^N/, '');
+    const newPlane: Aircraft = {
+      ...aircraftData,
+      id: `plane-${cleanTail}-${Date.now().toString(36)}`,
+      tailNumber: cleanTail,
+      hoursRemaining: 100,
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'Dispatch',
+    };
+
+    setFleet((prev) => [...prev.filter((p) => p.id !== newPlane.id), newPlane]);
+    setHasUnsavedChanges(true);
+    return newPlane;
+  }, []);
+
+  // Action: Delete Aircraft (0ms local stage)
+  const deleteAircraft = useCallback((id: string) => {
+    setFleet((prev) => prev.filter((p) => p.id !== id));
+    setHasUnsavedChanges(true);
+  }, []);
+
+  // Action: SAVE ALL CHANGES (Atomic snapshot commit to database)
+  const saveChanges = useCallback(async (): Promise<boolean> => {
+    setIsSaving(true);
     try {
-      await fetch(`/api/aircraft/${updates.id}`, {
+      const nowIso = new Date().toISOString();
+      const payload = fleet.map((p) => ({ ...p, updatedAt: nowIso }));
+
+      const res = await fetch('/api/fleet', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-    } catch (e) {
-      console.error('Failed to update aircraft on server:', e);
-    }
-  }, []);
 
-  // Action: Move Location
-  const moveLocation = useCallback(
-    async (id: string, newLocation: AirportLocation) => {
-      const target = fleet.find((p) => p.id === id);
-      if (!target || target.location === newLocation) return;
-
-      let newStatus = target.status;
-      if (target.status === 'Up-Enroute') {
-        newStatus = 'Up';
+      if (res.ok) {
+        setHasUnsavedChanges(false);
+        setIsSaving(false);
+        setLastSyncTime(new Date());
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        } catch {}
+        return true;
       }
+      setIsSaving(false);
+      return false;
+    } catch (e) {
+      console.error('Failed to save fleet changes:', e);
+      setIsSaving(false);
+      return false;
+    }
+  }, [fleet]);
 
-      await updateAircraft({
-        id,
-        location: newLocation,
-        status: newStatus,
-        enrouteTo: undefined,
-        eta: undefined,
-      });
-    },
-    [fleet, updateAircraft]
-  );
-
-  // Action: Change Status
-  const updateStatus = useCallback(
-    async (id: string, newStatus: AircraftStatus) => {
-      await updateAircraft({ id, status: newStatus });
-    },
-    [updateAircraft]
-  );
-
-  // Action: Add Aircraft
-  const addAircraft = useCallback(async (aircraftData: Omit<Aircraft, 'id' | 'updatedAt'>) => {
-    lastLocalEditTimeRef.current = Date.now();
-    const nowIso = new Date().toISOString();
-
+  // Action: DISCARD CHANGES (Revert to server state)
+  const discardChanges = useCallback(async () => {
+    setIsSaving(true);
+    hasUnsavedChangesRef.current = false;
     try {
-      const res = await fetch('/api/aircraft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...aircraftData, updatedAt: nowIso }),
+      const res = await fetch(`/api/fleet?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store' },
       });
       if (res.ok) {
-        const created: Aircraft = await res.json();
-        setFleet((prev) => {
-          const next = [...prev.filter((p) => p.id !== created.id), created];
+        const data: Aircraft[] = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setFleet(data);
           try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
           } catch {}
-          return next;
-        });
-        return created;
+        }
       }
     } catch (e) {
-      console.error('Failed to add aircraft:', e);
-    }
-  }, []);
-
-  // Action: Delete Aircraft
-  const deleteAircraft = useCallback(async (id: string) => {
-    lastLocalEditTimeRef.current = Date.now();
-
-    // 0ms Optimistic UI removal
-    setFleet((prev) => {
-      const next = prev.filter((p) => p.id !== id);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
-
-    try {
-      await fetch(`/api/aircraft/${id}`, { method: 'DELETE' });
-    } catch (e) {
-      console.error('Failed to delete aircraft:', e);
+      console.error('Failed to discard changes:', e);
+    } finally {
+      setHasUnsavedChanges(false);
+      setIsSaving(false);
     }
   }, []);
 
   // Action: Reset Fleet
   const resetFleet = useCallback(async () => {
-    lastLocalEditTimeRef.current = Date.now();
     try {
       const res = await fetch('/api/reset-fleet', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.fleet)) {
           setFleet(data.fleet);
+          setHasUnsavedChanges(false);
           try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data.fleet));
           } catch {}
@@ -290,18 +289,23 @@ export function useFleetSync() {
   // Compatibility stubs
   const logFlightHours = useCallback(async () => {}, []);
   const completeInspection = useCallback(async () => {}, []);
+  const updateAircraft = useCallback(async () => {}, []);
 
   return {
     fleet,
     connectionStatus,
     lastSyncTime,
-    updateAircraft,
+    hasUnsavedChanges,
+    isSaving,
+    saveChanges,
+    discardChanges,
     moveLocation,
     updateStatus,
-    logFlightHours,
-    completeInspection,
     addAircraft,
     deleteAircraft,
     resetFleet,
+    logFlightHours,
+    completeInspection,
+    updateAircraft,
   };
 }
