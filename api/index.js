@@ -32,9 +32,10 @@ const SEED_DATA = [
   { id: 'plane-5366M', tailNumber: '5366M', type: '152', location: 'HAA Campus', status: 'Up', hoursRemaining: 82.5, totalHobbs: 4190.2, notes: 'Campus ramp ready for dispatch', updatedAt: '2026-01-01T00:00:00.000Z' },
 ];
 
-import { put, list } from '@vercel/blob';
+import { put, list, del } from '@vercel/blob';
 
 const STORAGE_KEY = 'rdm_fleet_v2';
+const BLOB_PREFIX = 'rdm-fleet-live-';
 let memoryFleet = [...SEED_DATA];
 
 // Initialize Redis / Upstash / Vercel KV if environment variables are provided
@@ -72,38 +73,54 @@ async function getFleet() {
     try {
       const data = await redis.get(STORAGE_KEY);
       if (Array.isArray(data) && data.length > 0) {
+        memoryFleet = data;
         return data;
       }
       await redis.set(STORAGE_KEY, SEED_DATA);
+      memoryFleet = SEED_DATA;
       return SEED_DATA;
     } catch (err) {
       console.error('Redis read error:', err);
     }
   }
 
-  // 2. Try Vercel Blob
+  // 2. Try Vercel Blob (Immutable timestamped blobs for 100% instant zero-delay consistency)
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      const { blobs } = await list({ prefix: 'rdm-fleet-v2.json' });
+      const { blobs } = await list({ prefix: BLOB_PREFIX });
       if (blobs && blobs.length > 0) {
-        const res = await fetch(`${blobs[0].url}?t=${Date.now()}`, { cache: 'no-store' });
+        blobs.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+        const res = await fetch(blobs[0].url, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) return data;
+          if (Array.isArray(data) && data.length > 0) {
+            memoryFleet = data;
+            return data;
+          }
         }
       }
-      await put('rdm-fleet-v2.json', JSON.stringify(SEED_DATA), {
-        access: 'public',
-        addRandomSuffix: false,
-        allowOverwrite: true,
-      });
+
+      // Check legacy blob once if live blobs not yet created
+      const { blobs: legacyBlobs } = await list({ prefix: 'rdm-fleet-v2.json' });
+      if (legacyBlobs && legacyBlobs.length > 0) {
+        const res = await fetch(`${legacyBlobs[0].url}?t=${Date.now()}`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            await saveFleet(data);
+            return data;
+          }
+        }
+      }
+
+      await saveFleet(SEED_DATA);
       return SEED_DATA;
     } catch (err) {
       console.error('Blob read error:', err);
     }
   }
 
-  return memoryFleet;
+  return memoryFleet || SEED_DATA;
 }
 
 async function saveFleet(newFleet) {
@@ -118,14 +135,28 @@ async function saveFleet(newFleet) {
     }
   }
 
-  // Save to Vercel Blob if available
+  // Save to Vercel Blob (Immutable blob URL to immediately bypass CDN cache)
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      await put('rdm-fleet-v2.json', JSON.stringify(newFleet), {
+      const timestamp = Date.now();
+      const newBlobName = `${BLOB_PREFIX}${timestamp}.json`;
+      await put(newBlobName, JSON.stringify(newFleet), {
         access: 'public',
         addRandomSuffix: false,
-        allowOverwrite: true,
       });
+
+      // Cleanup older blobs asynchronously (keep latest 3)
+      list({ prefix: BLOB_PREFIX })
+        .then(({ blobs }) => {
+          if (blobs && blobs.length > 3) {
+            blobs.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+            const toDelete = blobs.slice(3).map((b) => b.url);
+            if (toDelete.length > 0) {
+              del(toDelete).catch(() => {});
+            }
+          }
+        })
+        .catch(() => {});
     } catch (err) {
       console.error('Blob write error:', err);
       throw err;
@@ -141,12 +172,17 @@ app.use(express.json());
 app.get(['/api/status', '/status'], async (req, res) => {
   let blobError = null;
   let blobCount = 0;
+  let latestBlob = null;
   let redisError = null;
 
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
-      const { blobs } = await list({ prefix: 'rdm-fleet-v2.json' });
+      const { blobs } = await list({ prefix: BLOB_PREFIX });
       blobCount = blobs.length;
+      if (blobs.length > 0) {
+        blobs.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+        latestBlob = blobs[0].pathname;
+      }
     } catch (e) {
       blobError = e.message;
     }
@@ -165,6 +201,7 @@ app.get(['/api/status', '/status'], async (req, res) => {
     redisError,
     hasBlobToken: !!process.env.BLOB_READ_WRITE_TOKEN,
     blobCount,
+    latestBlob,
     blobError,
     storageType: redis ? 'redis' : (process.env.BLOB_READ_WRITE_TOKEN ? 'blob' : 'in-memory-only'),
   });
