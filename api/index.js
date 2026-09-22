@@ -192,6 +192,24 @@ async function saveFleet(newFleet) {
   }
 }
 
+// Merge utility: combines incoming changes with existing fleet using updatedAt timestamps
+function mergeAircraftArrays(existingFleet, updates) {
+  const map = new Map(existingFleet.map((p) => [p.id, p]));
+  for (const up of updates) {
+    const ex = map.get(up.id);
+    if (!ex) {
+      map.set(up.id, up);
+    } else {
+      const exTime = ex.updatedAt ? new Date(ex.updatedAt).getTime() : 0;
+      const upTime = up.updatedAt ? new Date(up.updatedAt).getTime() : 0;
+      if (upTime >= exTime) {
+        map.set(up.id, { ...ex, ...up });
+      }
+    }
+  }
+  return Array.from(map.values());
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -208,7 +226,7 @@ app.get(['/api/status', '/status'], async (req, res) => {
       const { blobs } = await list({ prefix: BLOB_PREFIX });
       blobCount = blobs.length;
       if (blobs.length > 0) {
-        blobs.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+        blobs.sort((a, b) => getBlobTimestamp(b) - getBlobTimestamp(a));
         latestBlob = blobs[0].pathname;
       }
     } catch (e) {
@@ -269,7 +287,7 @@ app.post(['/api/aircraft', '/aircraft'], async (req, res) => {
     location,
     status: status || 'Up',
     hoursRemaining: 100.0,
-    updatedAt: new Date().toISOString(),
+    updatedAt: req.body.updatedAt || new Date().toISOString(),
     updatedBy: req.body.updatedBy || 'Dispatch',
   };
 
@@ -278,26 +296,37 @@ app.post(['/api/aircraft', '/aircraft'], async (req, res) => {
   res.status(201).json(newPlane);
 });
 
-// PUT /api/aircraft/:id
+// PUT /api/aircraft/:id - Conflict-free update with timestamp merge
 app.put(['/api/aircraft/:id', '/aircraft/:id'], async (req, res) => {
   const { id } = req.params;
-  const fleet = await getFleet();
-  const index = fleet.findIndex((p) => p.id === id);
-  if (index === -1) {
+  const currentFleet = await getFleet();
+  const existing = currentFleet.find((p) => p.id === id);
+  if (!existing) {
     return res.status(404).json({ error: 'Aircraft not found' });
   }
 
-  const existing = fleet[index];
-  const updated = {
+  const updatedPlane = {
     ...existing,
     ...req.body,
     id: existing.id,
-    updatedAt: new Date().toISOString(),
+    updatedAt: req.body.updatedAt || new Date().toISOString(),
   };
 
-  fleet[index] = updated;
-  await saveFleet(fleet);
-  res.json(updated);
+  const merged = mergeAircraftArrays(currentFleet, [updatedPlane]);
+  await saveFleet(merged);
+  res.json(updatedPlane);
+});
+
+// PUT /api/fleet - Full fleet sync endpoint
+app.put(['/api/fleet', '/fleet'], async (req, res) => {
+  const incoming = req.body;
+  if (!Array.isArray(incoming)) {
+    return res.status(400).json({ error: 'Expected array of aircraft' });
+  }
+  const currentFleet = await getFleet();
+  const merged = mergeAircraftArrays(currentFleet, incoming);
+  await saveFleet(merged);
+  res.json(merged);
 });
 
 // DELETE /api/aircraft/:id

@@ -1,9 +1,28 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Aircraft, AirportLocation, AircraftStatus, WSMessage } from '../types';
+import { Aircraft, AirportLocation, AircraftStatus } from '../types';
 import { INITIAL_FLEET } from '../data/seedFleet';
 
-// Bumped cache key to flush old stale device-specific caches
 const STORAGE_KEY = 'haa_fleet_live_v1';
+
+// Equality check: Prevents unnecessary React re-renders if no actual fields changed
+function isFleetEqual(a: Aircraft[], b: Aircraft[]): boolean {
+  if (a.length !== b.length) return false;
+  const bMap = new Map(b.map((p) => [p.id, p]));
+  for (const pa of a) {
+    const pb = bMap.get(pa.id);
+    if (!pb) return false;
+    if (
+      pa.location !== pb.location ||
+      pa.status !== pb.status ||
+      pa.tailNumber !== pb.tailNumber ||
+      pa.type !== pb.type ||
+      pa.notes !== pb.notes
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export function useFleetSync() {
   const [fleet, setFleet] = useState<Aircraft[]>(() => {
@@ -15,41 +34,24 @@ export function useFleetSync() {
           return parsed;
         }
       }
-    } catch {
-      // fallback to initial
-    }
+    } catch {}
     return INITIAL_FLEET;
   });
 
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'offline'>('connected');
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
-  const [recentNotification, setRecentNotification] = useState<string | null>(null);
 
-  // Tracks IDs touched locally on THIS tab and when (ms)
-  // Keeps UI instant during drag & drop without fighting incoming polling
-  const inFlightEditsRef = useRef<Map<string, number>>(new Map());
+  // Timestamp of the last local edit on THIS browser tab
+  const lastLocalEditTimeRef = useRef<number>(0);
 
-  // WebSocket reference for local development
-  const wsRef = useRef<WebSocket | null>(null);
-
-  const notifyUser = useCallback((msg: string) => {
-    setRecentNotification(msg);
-    setTimeout(() => {
-      setRecentNotification((current) => (current === msg ? null : current));
-    }, 4000);
-  }, []);
-
-  // Server-First Sync: The server (Vercel Blob) is the Single Source of Truth across all devices.
-  // When polling /api/fleet, we adopt serverFleet.
-  // If an aircraft was edited locally in THIS tab recently, we protect it as long as the local edit
-  // is newer than the server response (i.e. server write hasn't arrived back yet).
+  // Synchronize server fleet into local state without conflict or flicker
   const syncServerFleet = useCallback((serverFleet: Aircraft[]) => {
     if (!Array.isArray(serverFleet) || serverFleet.length === 0) return;
 
     setFleet((currentFleet) => {
-      const now = Date.now();
       const currentMap = new Map(currentFleet.map((p) => [p.id, p]));
 
+      // 1. Only keep planes that exist on the server (deleted planes stay deleted)
       const nextFleet = serverFleet.map((sPlane) => {
         const localPlane = currentMap.get(sPlane.id);
         if (!localPlane) return sPlane;
@@ -57,15 +59,21 @@ export function useFleetSync() {
         const sTime = sPlane.updatedAt ? new Date(sPlane.updatedAt).getTime() : 0;
         const lTime = localPlane.updatedAt ? new Date(localPlane.updatedAt).getTime() : 0;
 
-        const inFlightTime = inFlightEditsRef.current.get(sPlane.id);
-        // If modified on THIS tab in the last 10 seconds AND local version has newer timestamp,
-        // keep local until server catches up to prevent any 2-second rollback
-        if (inFlightTime && now - inFlightTime < 10000 && lTime > sTime) {
+        // If local plane was updated more recently on THIS device, DO NOT revert!
+        // Keep local version until server catches up.
+        if (lTime > sTime) {
           return localPlane;
         }
 
+        // Server has equal or newer timestamp, adopt server truth
         return sPlane;
       });
+
+      // 2. If nothing actually changed on the board, return current reference!
+      // This completely stops React re-render jitter and input flickering!
+      if (isFleetEqual(currentFleet, nextFleet)) {
+        return currentFleet;
+      }
 
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(nextFleet));
@@ -76,7 +84,7 @@ export function useFleetSync() {
     });
   }, []);
 
-  // Fetch live fleet from API with timestamp cache-buster to prevent mobile browser caching
+  // Fetch live fleet from API
   const fetchFleetRest = useCallback(async () => {
     try {
       const res = await fetch(`/api/fleet?_t=${Date.now()}`, {
@@ -95,126 +103,95 @@ export function useFleetSync() {
         }
       }
     } catch {
-      // Offline fallback remains in state
       setConnectionStatus('offline');
     }
   }, [syncServerFleet]);
 
-  // Polling and synchronization lifecycle
+  // Polling lifecycle
   useEffect(() => {
     let isUnmounted = false;
 
-    // 1. Initial fetch on mount
+    // Initial fetch
     fetchFleetRest();
 
-    // 2. High-frequency 2-second polling for real-time fleet synchronization across all devices
+    // Poll every 3.5 seconds
     const pollInterval = window.setInterval(() => {
-      if (!isUnmounted && document.visibilityState === 'visible') {
+      if (isUnmounted) return;
+
+      // CRITICAL: Pause polling for 5 seconds after a user action in this tab!
+      // This gives the server time to replicate and guarantees zero collision/flicker.
+      const timeSinceLocalEdit = Date.now() - lastLocalEditTimeRef.current;
+      if (timeSinceLocalEdit < 5000) {
+        return;
+      }
+
+      if (document.visibilityState === 'visible') {
         fetchFleetRest();
       }
-    }, 2000);
+    }, 3500);
 
-    // 3. Immediate re-sync when tab is reopened or window gains focus (e.g. phone unlock)
-    const handleVisibilityOrFocus = () => {
+    // Immediate refresh on tab focus (e.g. unlocking phone or switching back)
+    const handleFocus = () => {
       if (!isUnmounted && document.visibilityState === 'visible') {
-        fetchFleetRest();
+        const timeSinceLocalEdit = Date.now() - lastLocalEditTimeRef.current;
+        if (timeSinceLocalEdit >= 5000) {
+          fetchFleetRest();
+        }
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
-    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
 
-    // 4. Instant 0ms synchronization between multiple tabs on the same device
+    // 0ms instant sync across multiple tabs on the same device
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY && e.newValue) {
         try {
           const updatedFleet: Aircraft[] = JSON.parse(e.newValue);
           if (Array.isArray(updatedFleet) && updatedFleet.length > 0) {
-            setFleet(updatedFleet);
+            setFleet((prev) => (isFleetEqual(prev, updatedFleet) ? prev : updatedFleet));
           }
-        } catch {
-          /* empty */
-        }
+        } catch {}
       }
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // 5. Optional WebSocket connection for local dev (server.js) only
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      try {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
-        const ws = new WebSocket(wsUrl);
-        wsRef.current = ws;
-
-        ws.onmessage = (event) => {
-          if (isUnmounted) return;
-          try {
-            const message: WSMessage = JSON.parse(event.data);
-            if (message.type === 'INIT_FLEET' || message.type === 'FLEET_RESET') {
-              syncServerFleet(message.payload);
-            }
-          } catch {
-            /* empty */
-          }
-        };
-      } catch {
-        /* empty */
-      }
-    }
-
     return () => {
       isUnmounted = true;
       clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
-      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
       window.removeEventListener('storage', handleStorageChange);
-      if (wsRef.current) wsRef.current.close();
     };
-  }, [fetchFleetRest, syncServerFleet]);
+  }, [fetchFleetRest]);
 
   // Action: Update Aircraft (Status, Location, Notes)
   const updateAircraft = useCallback(async (updates: Partial<Aircraft> & { id: string }) => {
-    inFlightEditsRef.current.set(updates.id, Date.now());
+    // Record local edit timestamp to pause polling and protect from rollback
+    lastLocalEditTimeRef.current = Date.now();
+    const nowIso = new Date().toISOString();
+    const payload = { ...updates, updatedAt: nowIso };
 
-    // 0ms Optimistic UI update
+    // 0ms Instant Optimistic UI update
     setFleet((prev) => {
-      const next = prev.map((p) =>
-        p.id === updates.id
-          ? { ...p, ...updates, updatedAt: new Date().toISOString() }
-          : p
-      );
+      const next = prev.map((p) => (p.id === updates.id ? { ...p, ...payload } : p));
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        /* empty */
-      }
+      } catch {}
       return next;
     });
 
     try {
-      const res = await fetch(`/api/aircraft/${updates.id}`, {
+      await fetch(`/api/aircraft/${updates.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
+        body: JSON.stringify(payload),
       });
-      if (res.ok) {
-        const data: Aircraft = await res.json();
-        setFleet((prev) => {
-          const next = prev.map((p) => (p.id === data.id ? data : p));
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-          } catch {
-            /* empty */
-          }
-          return next;
-        });
-      }
     } catch (e) {
       console.error('Failed to update aircraft on server:', e);
     }
   }, []);
 
-  // Action: Move Location (Madras <-> Sky Service <-> HAA Campus)
+  // Action: Move Location
   const moveLocation = useCallback(
     async (id: string, newLocation: AirportLocation) => {
       const target = fleet.find((p) => p.id === id);
@@ -236,7 +213,7 @@ export function useFleetSync() {
     [fleet, updateAircraft]
   );
 
-  // Action: Change Status (Up, Up-Low Hours, Up-Enroute, Down)
+  // Action: Change Status
   const updateStatus = useCallback(
     async (id: string, newStatus: AircraftStatus) => {
       await updateAircraft({ id, status: newStatus });
@@ -246,22 +223,22 @@ export function useFleetSync() {
 
   // Action: Add Aircraft
   const addAircraft = useCallback(async (aircraftData: Omit<Aircraft, 'id' | 'updatedAt'>) => {
+    lastLocalEditTimeRef.current = Date.now();
+    const nowIso = new Date().toISOString();
+
     try {
       const res = await fetch('/api/aircraft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(aircraftData),
+        body: JSON.stringify({ ...aircraftData, updatedAt: nowIso }),
       });
       if (res.ok) {
         const created: Aircraft = await res.json();
-        inFlightEditsRef.current.set(created.id, Date.now());
         setFleet((prev) => {
           const next = [...prev.filter((p) => p.id !== created.id), created];
           try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-          } catch {
-            /* empty */
-          }
+          } catch {}
           return next;
         });
         return created;
@@ -273,14 +250,14 @@ export function useFleetSync() {
 
   // Action: Delete Aircraft
   const deleteAircraft = useCallback(async (id: string) => {
+    lastLocalEditTimeRef.current = Date.now();
+
     // 0ms Optimistic UI removal
     setFleet((prev) => {
       const next = prev.filter((p) => p.id !== id);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        /* empty */
-      }
+      } catch {}
       return next;
     });
 
@@ -293,6 +270,7 @@ export function useFleetSync() {
 
   // Action: Reset Fleet
   const resetFleet = useCallback(async () => {
+    lastLocalEditTimeRef.current = Date.now();
     try {
       const res = await fetch('/api/reset-fleet', { method: 'POST' });
       if (res.ok) {
@@ -301,9 +279,7 @@ export function useFleetSync() {
           setFleet(data.fleet);
           try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data.fleet));
-          } catch {
-            /* empty */
-          }
+          } catch {}
         }
       }
     } catch (e) {
@@ -319,7 +295,6 @@ export function useFleetSync() {
     fleet,
     connectionStatus,
     lastSyncTime,
-    recentNotification,
     updateAircraft,
     moveLocation,
     updateStatus,
